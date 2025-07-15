@@ -1,0 +1,41 @@
+{
+  "name": "simple-text-app",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web"
+  },
+  "dependencies": {
+    "@expo/metro-runtime": "^5.0.4",
+    "@expo/vector-icons": "^14.1.0",
+    "@react-native-community/blur": "^4.4.1",
+    "@react-navigation/native": "^7.1.14",
+    "@react-navigation/stack": "^7.4.2",
+    "@types/three": "^0.178.1",
+    "axios": "^1.10.0",
+    "expo": "~53.0.17",
+    "expo-dev-client": "~5.2.4",
+    "expo-gl": "^15.1.7",
+    "expo-speech": "^13.1.7",
+    "expo-speech-recognition": "^2.1.1",
+    "expo-status-bar": "~2.2.3",
+    "expo-three": "^8.0.0",
+    "react": "19.0.0",
+    "react-native": "0.79.5",
+    "react-native-dotenv": "^3.4.11",
+    "react-native-gesture-handler": "~2.24.0",
+    "react-native-reanimated": "~3.17.4",
+    "react-native-safe-area-context": "5.4.0",
+    "react-native-screens": "^4.11.1",
+    "three": "^0.166.1"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.2",
+    "@types/react": "~19.0.10",
+    "typescript": "~5.8.3"
+  },
+  "private": true
+}
