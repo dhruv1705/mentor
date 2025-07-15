@@ -23,6 +23,7 @@ export interface ExtractedProfileInfo {
   age?: number;
   gender?: 'male' | 'female' | 'other' | 'prefer_not_to_say';
   height?: number;
+  name?: string;
   confidence: number; // 0-1 score for extraction confidence
   source: string; // the text that was parsed
 }

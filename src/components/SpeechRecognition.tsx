@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useImperativeHandle, forwardRef } from 'react';
+import React, { useState, useEffect, useImperativeHandle, forwardRef, useRef } from 'react';
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, Alert } from 'react-native';
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
 import VoiceAssistantOrb from './VoiceAssistantOrb';
@@ -26,6 +26,12 @@ const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionP
   const [supportsOnDevice, setSupportsOnDevice] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState('en-US');
   const [showSettings, setShowSettings] = useState(false);
+  
+  // Use refs for reliable access to current values (prevents race conditions)
+  const interimTextRef = useRef('');
+  const accumulatedFinalTextRef = useRef('');
+  const lastResultIndexRef = useRef(0);
+  const isProcessingRef = useRef(false);
 
   useEffect(() => {
     checkAvailability();
@@ -37,6 +43,48 @@ const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionP
       onListeningChange(isListening);
     }
   }, [isListening, onListeningChange]);
+
+  // Consolidated function to move interim text to final text (prevents race conditions)
+  const moveInterimToFinal = () => {
+    if (isProcessingRef.current) return; // Prevent concurrent processing
+    isProcessingRef.current = true;
+    
+    try {
+      const currentInterim = interimTextRef.current.trim();
+      const currentAccumulated = accumulatedFinalTextRef.current.trim();
+      
+      if (currentInterim) {
+        // Combine accumulated final text with new interim text
+        const newFinalText = currentAccumulated + 
+          (currentAccumulated ? ' ' : '') + 
+          currentInterim;
+        
+        // Update the main text input
+        const existingText = text.trim();
+        const completeText = existingText + 
+          (existingText ? ' ' : '') + 
+          newFinalText;
+        
+        onTextChange(completeText);
+        
+        // Reset accumulated text and interim text
+        accumulatedFinalTextRef.current = '';
+        interimTextRef.current = '';
+        setTranscript('');
+      }
+    } finally {
+      isProcessingRef.current = false;
+    }
+  };
+
+  // Reset session state when starting new speech recognition
+  const resetSessionState = () => {
+    interimTextRef.current = '';
+    accumulatedFinalTextRef.current = '';
+    lastResultIndexRef.current = 0;
+    isProcessingRef.current = false;
+    setTranscript('');
+  };
 
   // Expose methods to parent component
   useImperativeHandle(ref, () => ({
@@ -58,16 +106,21 @@ const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionP
   useSpeechRecognitionEvent('start', () => {
     console.log('Speech recognition started');
     setIsListening(true);
+    resetSessionState();
   });
 
   useSpeechRecognitionEvent('end', () => {
     console.log('Speech recognition ended');
+    
+    // Process any remaining interim text before cleaning up
+    moveInterimToFinal();
+    
     setIsListening(false);
-    setTranscript('');
     if (timeoutId) {
       clearTimeout(timeoutId);
       setTimeoutId(null);
     }
+    setCountdown(0);
   });
 
   useSpeechRecognitionEvent('result', (event) => {
@@ -75,32 +128,41 @@ const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionP
     console.log('Event results:', JSON.stringify(event.results, null, 2));
     
     if (event.results && event.results.length > 0) {
-      let finalTranscript = '';
-      let interimTranscript = '';
+      let newFinalText = '';
+      let newInterimText = '';
       
-      for (let i = 0; i < event.results.length; i++) {
+      // Process only new results (those beyond lastResultIndex)
+      for (let i = lastResultIndexRef.current; i < event.results.length; i++) {
         const result = event.results[i];
-        console.log(`Result ${i}:`, result);
+        console.log(`Processing result ${i}:`, result);
         
         if (result.isFinal) {
-          finalTranscript += result.transcript;
+          newFinalText += result.transcript;
           console.log('Final transcript found:', result.transcript);
+          lastResultIndexRef.current = i + 1; // Update processed index
         } else {
-          interimTranscript += result.transcript;
+          newInterimText += result.transcript;
           console.log('Interim transcript found:', result.transcript);
         }
       }
       
-      // Update with final results, append to existing text
-      if (finalTranscript.trim()) {
-        console.log('Adding final transcript to text:', finalTranscript);
-        const newText = text + (text ? ' ' : '') + finalTranscript.trim();
-        console.log('New text will be:', newText);
-        onTextChange(newText);
-        setTranscript(''); // Clear interim when we have final
-      } else {
-        // Show interim results in real-time
-        setTranscript(interimTranscript.trim());
+      // Handle final results by accumulating them
+      if (newFinalText.trim()) {
+        console.log('Adding final transcript to accumulated text:', newFinalText);
+        accumulatedFinalTextRef.current += 
+          (accumulatedFinalTextRef.current ? ' ' : '') + 
+          newFinalText.trim();
+        console.log('Accumulated final text:', accumulatedFinalTextRef.current);
+      }
+      
+      // Handle interim results by updating the ref and display
+      if (newInterimText.trim()) {
+        interimTextRef.current = newInterimText.trim();
+        setTranscript(newInterimText.trim());
+      } else if (newFinalText.trim()) {
+        // Clear interim display when we get final results
+        interimTextRef.current = '';
+        setTranscript('');
       }
       
       // Reset auto-stop timeout when we get results
@@ -108,18 +170,15 @@ const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionP
         clearTimeout(timeoutId);
       }
       
-      // Set auto-stop after 5 seconds of silence with countdown
-      setCountdown(5);
+      // Set auto-stop after 4 seconds of silence with countdown
+      setCountdown(4);
       const newTimeoutId = setTimeout(() => {
         if (isListening) {
           console.log('Auto-stopping due to silence');
-          // Move any remaining interim text to final before stopping
-          if (transcript.trim()) {
-            onTextChange(text + (text ? ' ' : '') + transcript.trim());
-          }
+          moveInterimToFinal();
           stopListening();
         }
-      }, 5000);
+      }, 4000);
       
       setTimeoutId(newTimeoutId);
     }
@@ -256,6 +315,7 @@ const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionP
     
     try {
       console.log('Starting speech recognition...');
+      resetSessionState();
       setIsListening(true);
       
       await ExpoSpeechRecognitionModule.start({
@@ -304,28 +364,28 @@ const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionP
         setTimeoutId(null);
       }
       setCountdown(0);
+      
+      // Process any remaining text before stopping
+      moveInterimToFinal();
+      
       await ExpoSpeechRecognitionModule.stop();
       setIsListening(false);
-      setTranscript('');
     } catch (error) {
       Alert.alert('Error', 'Failed to stop listening: ' + error);
       setIsListening(false);
-      setTranscript('');
       setCountdown(0);
+      resetSessionState();
     }
   };
 
   const clearText = () => {
     onTextChange('');
-    setTranscript('');
+    resetSessionState();
   };
 
   const finishSpeaking = () => {
-    // Move interim text to final text
-    if (transcript.trim()) {
-      onTextChange(text + (text ? ' ' : '') + transcript.trim());
-      setTranscript('');
-    }
+    // Move interim text to final text using the consolidated function
+    moveInterimToFinal();
   };
 
   const handleOrbPress = () => {
@@ -604,7 +664,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   interimContainer: {
-    backgroundColor: '#F0F8FF',
+    backgroundColor: '#000000',
     borderWidth: 1,
     borderColor: '#007AFF',
     borderRadius: 6,
