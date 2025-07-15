@@ -33,6 +33,20 @@ export class TTSService {
   private elevenLabsApiKey: string | null = null;
   private currentElevenLabsSound: Audio.Sound | null = null;
 
+  // Convert ArrayBuffer to base64 using chunked approach to avoid stack overflow
+  private arrayBufferToBase64(buffer: ArrayBuffer): string {
+    const bytes = new Uint8Array(buffer);
+    const chunkSize = 8192; // Process in smaller chunks to avoid call stack limits
+    let binary = '';
+    
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      const chunk = bytes.slice(i, i + chunkSize);
+      binary += String.fromCharCode.apply(null, Array.from(chunk));
+    }
+    
+    return btoa(binary);
+  }
+
   private status: TTSStatus = {
     isPlaying: false,
     currentText: null,
@@ -144,21 +158,25 @@ export class TTSService {
         }),
       });
       
-      console.log('ElevenLabs API response status:', response.status);
-      console.log('ElevenLabs API response headers:', response.headers);
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('ElevenLabs API error response:', errorText);
         throw new Error(`ElevenLabs API error: ${response.status} - ${errorText}`);
       }
 
-      console.log('ElevenLabs TTS audio generated successfully');
       
-      // Get the audio as array buffer
       const audioBuffer = await response.arrayBuffer();
       
-      // Create sound object and play it (same pattern as system TTS)
+      // Clean up any previous ElevenLabs audio to prevent memory leaks
+      if (this.currentElevenLabsSound) {
+        try {
+          await this.currentElevenLabsSound.unloadAsync();
+        } catch (cleanupError) {
+          // Ignore cleanup errors
+        }
+        this.currentElevenLabsSound = null;
+      }
+      
       try {
         await Audio.setAudioModeAsync({
           allowsRecordingIOS: false,
@@ -170,7 +188,7 @@ export class TTSService {
         
         const { sound } = await Audio.Sound.createAsync(
           {
-            uri: `data:audio/mpeg;base64,${btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(audioBuffer))))}`,
+            uri: `data:audio/mpeg;base64,${this.arrayBufferToBase64(audioBuffer)}`,
           },
           { shouldPlay: false }
         );
