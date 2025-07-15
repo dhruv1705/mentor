@@ -86,6 +86,11 @@ export default function ClaudeChat({ initialText, isListening, onStartListening,
     setInputText('');
     setError(null);
     setIsLoading(true);
+    
+    // Clear speech text in parent component to prevent accumulation
+    if (onClearText) {
+      onClearText();
+    }
 
     // Add user message to local conversation display
     const userMessage: ClaudeMessage = { role: 'user', content: messageToSend };
