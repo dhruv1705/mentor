@@ -20,6 +20,15 @@ export default function ProfileScreen() {
     ttsService.updateSettings({ [key]: value });
   };
 
+  const testTTSSettings = async () => {
+    try {
+      await ttsService.testCurrentSettings();
+    } catch (error) {
+      console.error('TTS test error:', error);
+      Alert.alert('Error', 'Failed to test voice settings');
+    }
+  };
+
   const handleSignOut = () => {
     Alert.alert(
       'Sign Out',
@@ -207,6 +216,10 @@ export default function ProfileScreen() {
             <Text style={styles.settingLabel}>Language</Text>
             <Text style={styles.settingValue}>{settings.language}</Text>
           </View>
+
+          <TouchableOpacity style={styles.testButton} onPress={testTTSSettings}>
+            <Text style={styles.testButtonText}>🎤 Test Voice Settings</Text>
+          </TouchableOpacity>
         </View>
 
         {/* App Settings Section */}
@@ -452,5 +465,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  testButton: {
+    backgroundColor: '#00ccff',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 15,
+  },
+  testButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });

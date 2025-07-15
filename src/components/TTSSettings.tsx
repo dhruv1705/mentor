@@ -43,7 +43,7 @@ export default function TTSSettingsModal({ visible, onClose }: TTSSettingsProps)
 
   const testVoice = async () => {
     try {
-      await ttsService.speak('Hello, this is a test of the selected voice settings.', settings);
+      await ttsService.testCurrentSettings();
     } catch (error) {
       console.error('Voice test error:', error);
       Alert.alert('Error', 'Failed to test voice');
