@@ -15,11 +15,11 @@ export interface TTSStatus {
 
 export class TTSService {
   private settings: TTSSettings = {
-    rate: 0.8,
+    rate: 1.0,
     pitch: 1.0,
     language: 'en-US',
     voice: undefined,
-    autoPlay: false,
+    autoPlay: true,
   };
 
   private status: TTSStatus = {
@@ -182,6 +182,16 @@ export class TTSService {
 
   changePitch(pitch: number): void {
     this.updateSettings({ pitch });
+  }
+
+  async testCurrentSettings(): Promise<void> {
+    const testText = "This is a test of the current speech rate and pitch settings.";
+    try {
+      await this.speak(testText);
+    } catch (error) {
+      console.error('TTS test error:', error);
+      throw error;
+    }
   }
 
   async getVoiceInfo(): Promise<{

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useImperativeHandle, forwardRef, useRef } f
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, Alert } from 'react-native';
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
 import VoiceAssistantOrb from './VoiceAssistantOrb';
+import { ttsService } from '../services/ttsService';
 
 interface SpeechRecognitionProps {
   onTextChange: (text: string) => void;
@@ -388,7 +389,14 @@ const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionP
     moveInterimToFinal();
   };
 
-  const handleOrbPress = () => {
+  const handleOrbPress = async () => {
+    // Stop TTS if it's currently playing
+    try {
+      await ttsService.stop();
+    } catch (error) {
+      console.error('Error stopping TTS:', error);
+    }
+    
     if (isListening) {
       stopListening();
     } else {

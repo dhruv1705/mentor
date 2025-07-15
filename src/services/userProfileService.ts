@@ -168,18 +168,13 @@ export class UserProfileService {
 
   static async cleanupOldDefaults(profile: UserProfile): Promise<UserProfile> {
     try {
-      const needsCleanup = profile.name === 'Voice Assistant User' || 
-                          profile.gender === 'Not specified';
+      const needsCleanup = profile.name === 'Voice Assistant User';
       
       if (needsCleanup) {
         const updates: Partial<UserProfile> = {};
         
         if (profile.name === 'Voice Assistant User') {
           updates.name = null;
-        }
-        
-        if (profile.gender === 'Not specified') {
-          updates.gender = null;
         }
         
         const { data, error } = await supabase
@@ -222,7 +217,7 @@ export class UserProfileService {
     // Handle both number and string types from database
     const hasAge = (typeof profile.age === 'number' && profile.age > 0) || 
                    (typeof profile.age === 'string' && parseInt(profile.age) > 0);
-    const hasGender = Boolean(profile.gender && profile.gender !== 'Not specified');
+    const hasGender = Boolean(profile.gender);
     const hasHeight = (typeof profile.height === 'number' && profile.height > 0) || 
                       (typeof profile.height === 'string' && parseInt(profile.height) > 0);
     const hasName = Boolean(profile.name?.trim() && profile.name.trim() !== 'Voice Assistant User');
