@@ -11,15 +11,19 @@ interface ClaudeChatProps {
   onStartListening?: () => void;
   onStopListening?: () => void;
   onClearText?: () => void;
+  speechCompleted?: boolean;
 }
 
-export default function ClaudeChat({ initialText, isListening, onStartListening, onStopListening, onClearText }: ClaudeChatProps) {
+export default function ClaudeChat({ initialText, isListening, onStartListening, onStopListening, onClearText, speechCompleted }: ClaudeChatProps) {
   const [inputText, setInputText] = useState(initialText);
   const [isLoading, setIsLoading] = useState(false);
   const [conversation, setConversation] = useState<ClaudeMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [ttsStatus, setTtsStatus] = useState<TTSStatus>(ttsService.getStatus());
   const [profileUpdateNotification, setProfileUpdateNotification] = useState<string | null>(null);
+  const [autoSendEnabled, setAutoSendEnabled] = useState(true);
+  const [autoSendCountdown, setAutoSendCountdown] = useState(0);
+  const [autoSendTimeoutId, setAutoSendTimeoutId] = useState<NodeJS.Timeout | null>(null);
 
   const { profile, updateProfileField, getProfileCompletion, refreshProfile } = useAuth();
 
@@ -27,6 +31,31 @@ export default function ClaudeChat({ initialText, isListening, onStartListening,
   useEffect(() => {
     setInputText(initialText);
   }, [initialText]);
+
+  // Start auto-send timer when speech recognition completes
+  useEffect(() => {
+    if (speechCompleted && initialText.trim() && autoSendEnabled && !isLoading) {
+      startAutoSendTimer();
+    }
+  }, [speechCompleted, initialText]);
+
+  // Auto-send countdown timer
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (autoSendCountdown > 0) {
+      interval = setInterval(() => {
+        setAutoSendCountdown(prev => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [autoSendCountdown]);
+
+  // Auto-send when countdown reaches 0
+  useEffect(() => {
+    if (autoSendCountdown === 0 && autoSendTimeoutId && inputText.trim()) {
+      sendMessage();
+    }
+  }, [autoSendCountdown]);
 
   // Set up TTS status listener
   useEffect(() => {
@@ -86,6 +115,13 @@ export default function ClaudeChat({ initialText, isListening, onStartListening,
     setInputText('');
     setError(null);
     setIsLoading(true);
+    
+    // Clear auto-send timer and countdown
+    if (autoSendTimeoutId) {
+      clearTimeout(autoSendTimeoutId);
+      setAutoSendTimeoutId(null);
+    }
+    setAutoSendCountdown(0);
     
     // Clear speech text in parent component to prevent accumulation
     if (onClearText) {
@@ -148,6 +184,21 @@ export default function ClaudeChat({ initialText, isListening, onStartListening,
   const toggleAutoPlay = () => {
     const settings = ttsService.getSettings();
     ttsService.updateSettings({ autoPlay: !settings.autoPlay });
+  };
+
+  const startAutoSendTimer = () => {
+    // Clear any existing timer
+    if (autoSendTimeoutId) {
+      clearTimeout(autoSendTimeoutId);
+    }
+    
+    // Start 4-second countdown
+    setAutoSendCountdown(4);
+    const timeoutId = setTimeout(() => {
+      setAutoSendCountdown(0);
+    }, 4000);
+    
+    setAutoSendTimeoutId(timeoutId);
   };
 
   const retryLastMessage = async () => {
@@ -286,7 +337,9 @@ export default function ClaudeChat({ initialText, isListening, onStartListening,
             onPress={sendMessage}
             disabled={!inputText.trim() || isLoading}
           >
-            <Text style={styles.sendButtonText}>📤 Send</Text>
+            <Text style={styles.sendButtonText}>
+              {autoSendCountdown > 0 ? `📤 Auto-send in ${autoSendCountdown}s` : '📤 Send'}
+            </Text>
           </TouchableOpacity>
           
           {conversation.length > 0 && (
