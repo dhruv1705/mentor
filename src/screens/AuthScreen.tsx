@@ -32,6 +32,7 @@ export const AuthScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#000000',
   },
   switchContainer: {
     flexDirection: 'row',
@@ -40,7 +41,7 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   switchText: {
-    color: '#666',
+    color: 'rgba(255, 255, 255, 0.7)',
     fontSize: 16,
   },
   switchLink: {

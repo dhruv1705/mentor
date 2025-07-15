@@ -157,23 +157,33 @@ export class ProfileExtractor {
   static extractName(text: string): { value: string | null; confidence: number } {
     const lowerText = text.toLowerCase();
     
-    // Patterns for name extraction
+    // Patterns for name extraction with confidence levels
     const patterns = [
-      // "My name is John", "I'm John"
-      /(?:my name is|i'm|i am|im|call me)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
-      // "I'm called John"
-      /(?:i'm called|they call me|people call me)\s+([A-Z][a-z]+)/i,
-      // Direct introduction patterns
-      /(?:hi,?\s+i'm|hello,?\s+i'm|hey,?\s+i'm)\s+([A-Z][a-z]+)/i,
+      // High confidence patterns
+      { pattern: /(?:my name is|name is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i, confidence: 0.9 },
+      { pattern: /(?:i'm called|they call me|people call me)\s+([A-Z][a-z]+)/i, confidence: 0.9 },
+      { pattern: /(?:call me)\s+([A-Z][a-z]+)/i, confidence: 0.85 },
+      
+      // Medium confidence patterns
+      { pattern: /(?:i'm|i am|im)\s+([A-Z][a-z]+)(?:\s|$|[,.!?])/i, confidence: 0.7 },
+      { pattern: /(?:hi,?\s+i'm|hello,?\s+i'm|hey,?\s+i'm)\s+([A-Z][a-z]+)/i, confidence: 0.8 },
+      { pattern: /(?:this is)\s+([A-Z][a-z]+)/i, confidence: 0.75 },
+      
+      // Lower confidence patterns
+      { pattern: /(?:^|\s)([A-Z][a-z]+)\s+(?:here|speaking)/i, confidence: 0.6 },
     ];
 
-    for (const pattern of patterns) {
+    for (const { pattern, confidence } of patterns) {
       const match = text.match(pattern); // Use original text to preserve capitalization
       if (match) {
         const name = match[1].trim();
         // Basic validation for name
         if (name.length >= 2 && name.length <= 50 && /^[A-Za-z\s]+$/.test(name)) {
-          return { value: name, confidence: 0.8 };
+          // Additional validation: avoid common words that might be misidentified
+          const commonWords = ['hello', 'help', 'good', 'great', 'sure', 'okay', 'yes', 'no', 'thanks', 'thank', 'please'];
+          if (!commonWords.includes(name.toLowerCase())) {
+            return { value: name, confidence };
+          }
         }
       }
     }
@@ -208,8 +218,13 @@ export class ProfileExtractor {
       extractedData.confidence = Math.max(extractedData.confidence, height.confidence);
     }
 
+    if (name.value !== null) {
+      extractedData.name = name.value;
+      extractedData.confidence = Math.max(extractedData.confidence, name.confidence);
+    }
+
     // Calculate overall confidence (average of individual confidences)
-    const confidences = [age.confidence, gender.confidence, height.confidence].filter(c => c > 0);
+    const confidences = [age.confidence, gender.confidence, height.confidence, name.confidence].filter(c => c > 0);
     if (confidences.length > 0) {
       extractedData.confidence = confidences.reduce((sum, c) => sum + c, 0) / confidences.length;
     }

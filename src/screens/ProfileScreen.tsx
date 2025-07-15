@@ -140,7 +140,11 @@ export default function ProfileScreen() {
           <View style={styles.profileImageContainer}>
             <Feather name="user" size={60} color="#00ccff" />
           </View>
-          <Text style={styles.profileName}>{profile?.name || user?.user_metadata?.full_name || 'Voice Assistant User'}</Text>
+          <Text style={styles.profileName}>
+            {(profile?.name?.trim() && profile.name.trim() !== 'Voice Assistant User') 
+              ? profile.name.trim() 
+              : user?.user_metadata?.full_name || 'User'}
+          </Text>
           <Text style={styles.profileEmail}>{user?.email || 'user@voiceassistant.app'}</Text>
         </View>
 

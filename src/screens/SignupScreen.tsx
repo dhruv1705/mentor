@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 
 export const SignupScreen: React.FC = () => {
@@ -17,6 +18,8 @@ export const SignupScreen: React.FC = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const { signUp } = useAuth();
 
   const handleSignup = async () => {
@@ -52,13 +55,20 @@ export const SignupScreen: React.FC = () => {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <View style={styles.content}>
+        <View style={styles.logoContainer}>
+          <View style={styles.logo}>
+            <Feather name="user" size={40} color="#00ccff" />
+          </View>
+        </View>
+
         <Text style={styles.title}>Create Account</Text>
         <Text style={styles.subtitle}>Join us to get started</Text>
 
         <View style={styles.form}>
           <TextInput
             style={styles.input}
-            placeholder="Email"
+            placeholder="kop@gmail.com"
+            placeholderTextColor="rgba(255, 255, 255, 0.6)"
             value={email}
             onChangeText={setEmail}
             keyboardType="email-address"
@@ -66,23 +76,49 @@ export const SignupScreen: React.FC = () => {
             autoCorrect={false}
           />
 
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            autoCapitalize="none"
-          />
+          <View style={styles.passwordContainer}>
+            <TextInput
+              style={styles.passwordInput}
+              placeholder="Password"
+              placeholderTextColor="rgba(255, 255, 255, 0.6)"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+              autoCapitalize="none"
+            />
+            <TouchableOpacity
+              style={styles.eyeIcon}
+              onPress={() => setShowPassword(!showPassword)}
+            >
+              <Feather
+                name={showPassword ? 'eye' : 'eye-off'}
+                size={20}
+                color="rgba(255, 255, 255, 0.6)"
+              />
+            </TouchableOpacity>
+          </View>
 
-          <TextInput
-            style={styles.input}
-            placeholder="Confirm Password"
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-            secureTextEntry
-            autoCapitalize="none"
-          />
+          <View style={styles.passwordContainer}>
+            <TextInput
+              style={styles.passwordInput}
+              placeholder="Confirm Password"
+              placeholderTextColor="rgba(255, 255, 255, 0.6)"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              secureTextEntry={!showConfirmPassword}
+              autoCapitalize="none"
+            />
+            <TouchableOpacity
+              style={styles.eyeIcon}
+              onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+            >
+              <Feather
+                name={showConfirmPassword ? 'eye' : 'eye-off'}
+                size={20}
+                color="rgba(255, 255, 255, 0.6)"
+              />
+            </TouchableOpacity>
+          </View>
 
           <TouchableOpacity
             style={[styles.button, loading && styles.buttonDisabled]}
@@ -104,41 +140,76 @@ export const SignupScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#000000',
   },
   content: {
     flex: 1,
     justifyContent: 'center',
     paddingHorizontal: 32,
   },
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  logo: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(0, 204, 255, 0.1)',
+    borderWidth: 2,
+    borderColor: '#00ccff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   title: {
     fontSize: 32,
     fontWeight: 'bold',
     textAlign: 'center',
     marginBottom: 8,
-    color: '#333',
+    color: '#FFFFFF',
   },
   subtitle: {
     fontSize: 16,
     textAlign: 'center',
     marginBottom: 48,
-    color: '#666',
+    color: 'rgba(255, 255, 255, 0.7)',
   },
   form: {
     gap: 16,
   },
   input: {
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 16,
     borderRadius: 8,
     fontSize: 16,
+    color: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  passwordContainer: {
+    position: 'relative',
+  },
+  passwordInput: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    paddingRight: 50,
+    borderRadius: 8,
+    fontSize: 16,
+    color: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  eyeIcon: {
+    position: 'absolute',
+    right: 16,
+    top: 18,
+    padding: 2,
   },
   button: {
     backgroundColor: '#28a745',
-    paddingVertical: 12,
+    paddingVertical: 16,
     borderRadius: 8,
     alignItems: 'center',
     marginTop: 16,

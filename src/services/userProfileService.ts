@@ -154,12 +154,56 @@ export class UserProfileService {
       // If no profile exists, create one
       if (!profile) {
         profile = await this.createUserProfile(userId, email);
+      } else {
+        // Clean up old default values if they exist
+        profile = await this.cleanupOldDefaults(profile);
       }
 
       return profile;
     } catch (error) {
       console.error('Error in getOrCreateProfile:', error);
       return null;
+    }
+  }
+
+  static async cleanupOldDefaults(profile: UserProfile): Promise<UserProfile> {
+    try {
+      const needsCleanup = profile.name === 'Voice Assistant User' || 
+                          profile.gender === 'Not specified';
+      
+      if (needsCleanup) {
+        const updates: Partial<UserProfile> = {};
+        
+        if (profile.name === 'Voice Assistant User') {
+          updates.name = null;
+        }
+        
+        if (profile.gender === 'Not specified') {
+          updates.gender = null;
+        }
+        
+        const { data, error } = await supabase
+          .from('user_profiles')
+          .update({
+            ...updates,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('user_id', profile.user_id)
+          .select()
+          .single();
+        
+        if (error) {
+          console.error('Error cleaning up old defaults:', error);
+          return profile;
+        }
+        
+        return data;
+      }
+      
+      return profile;
+    } catch (error) {
+      console.error('Error in cleanupOldDefaults:', error);
+      return profile;
     }
   }
 
@@ -178,10 +222,10 @@ export class UserProfileService {
     // Handle both number and string types from database
     const hasAge = (typeof profile.age === 'number' && profile.age > 0) || 
                    (typeof profile.age === 'string' && parseInt(profile.age) > 0);
-    const hasGender = Boolean(profile.gender);
+    const hasGender = Boolean(profile.gender && profile.gender !== 'Not specified');
     const hasHeight = (typeof profile.height === 'number' && profile.height > 0) || 
                       (typeof profile.height === 'string' && parseInt(profile.height) > 0);
-    const hasName = Boolean(profile.name?.trim());
+    const hasName = Boolean(profile.name?.trim() && profile.name.trim() !== 'Voice Assistant User');
 
     const completedFields = [hasAge, hasGender, hasHeight, hasName].filter(Boolean).length;
     const totalFields = 4;

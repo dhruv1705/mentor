@@ -42,12 +42,14 @@ export const ProfileCompletion: React.FC<ProfileCompletionProps> = ({
         const age = typeof profile.age === 'string' ? parseInt(profile.age) : profile.age;
         return age && age > 0 ? `${age} years old` : '';
       case 'gender':
-        return profile.gender ? profile.gender.replace('_', ' ') : '';
+        return profile.gender && profile.gender !== 'Not specified' ? profile.gender.replace('_', ' ') : '';
       case 'height':
         const height = typeof profile.height === 'string' ? parseInt(profile.height) : profile.height;
         return height && height > 0 ? `${height}cm` : '';
       case 'name':
-        return profile.name || '';
+        return (profile.name?.trim() && profile.name.trim() !== 'Voice Assistant User') 
+          ? profile.name.trim() 
+          : '';
       default:
         return '';
     }

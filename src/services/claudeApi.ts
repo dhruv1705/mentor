@@ -85,27 +85,66 @@ IMPORTANT GUIDELINES:
     if (!this.context?.onProfileUpdate) return;
 
     try {
-      const extractedInfo = ProfileExtractor.extractAllProfileInfo(userMessage);
+      console.log('🔍 Extracting profile info from message:', userMessage);
       
-      // Only save information with reasonable confidence
-      if (extractedInfo.confidence > 0.5) {
-        if (extractedInfo.age && !this.context.profile?.age) {
-          await this.context.onProfileUpdate('age', extractedInfo.age);
-          console.log(`Auto-saved age: ${extractedInfo.age} (confidence: ${extractedInfo.confidence})`);
-        }
+      // Extract each field individually for better debugging
+      const ageExtraction = ProfileExtractor.extractAge(userMessage);
+      const genderExtraction = ProfileExtractor.extractGender(userMessage);
+      const heightExtraction = ProfileExtractor.extractHeight(userMessage);
+      const nameExtraction = ProfileExtractor.extractName(userMessage);
+      
+      console.log('🔍 Extraction results:', {
+        age: ageExtraction,
+        gender: genderExtraction,
+        height: heightExtraction,
+        name: nameExtraction
+      });
+      
+      // Process age
+      if (ageExtraction.value && ageExtraction.confidence > 0.5) {
+        const hasAge = this.context.profile?.age && this.context.profile.age !== 'Voice Assistant User';
+        console.log('🔍 Age check - hasAge:', hasAge, 'current profile age:', this.context.profile?.age);
         
-        if (extractedInfo.gender && !this.context.profile?.gender) {
-          await this.context.onProfileUpdate('gender', extractedInfo.gender);
-          console.log(`Auto-saved gender: ${extractedInfo.gender} (confidence: ${extractedInfo.confidence})`);
+        if (!hasAge) {
+          await this.context.onProfileUpdate('age', ageExtraction.value);
+          console.log(`✅ Auto-saved age: ${ageExtraction.value} (confidence: ${ageExtraction.confidence})`);
         }
+      }
+      
+      // Process gender
+      if (genderExtraction.value && genderExtraction.confidence > 0.5) {
+        const hasGender = this.context.profile?.gender && this.context.profile.gender !== 'Not specified';
+        console.log('🔍 Gender check - hasGender:', hasGender, 'current profile gender:', this.context.profile?.gender);
         
-        if (extractedInfo.height && !this.context.profile?.height) {
-          await this.context.onProfileUpdate('height', extractedInfo.height);
-          console.log(`Auto-saved height: ${extractedInfo.height}cm (confidence: ${extractedInfo.confidence})`);
+        if (!hasGender) {
+          await this.context.onProfileUpdate('gender', genderExtraction.value);
+          console.log(`✅ Auto-saved gender: ${genderExtraction.value} (confidence: ${genderExtraction.confidence})`);
+        }
+      }
+      
+      // Process height
+      if (heightExtraction.value && heightExtraction.confidence > 0.5) {
+        const hasHeight = this.context.profile?.height && this.context.profile.height > 0;
+        console.log('🔍 Height check - hasHeight:', hasHeight, 'current profile height:', this.context.profile?.height);
+        
+        if (!hasHeight) {
+          await this.context.onProfileUpdate('height', heightExtraction.value);
+          console.log(`✅ Auto-saved height: ${heightExtraction.value}cm (confidence: ${heightExtraction.confidence})`);
+        }
+      }
+      
+      // Process name
+      if (nameExtraction.value && nameExtraction.confidence > 0.5) {
+        const hasName = this.context.profile?.name && this.context.profile.name.trim() !== 'Voice Assistant User';
+        console.log('🔍 Name check - hasName:', hasName, 'current profile name:', this.context.profile?.name);
+        
+        if (!hasName) {
+          await this.context.onProfileUpdate('name', nameExtraction.value);
+          console.log(`✅ Auto-saved name: ${nameExtraction.value} (confidence: ${nameExtraction.confidence})`);
         }
       }
     } catch (error) {
-      console.error('Error extracting profile information:', error);
+      console.error('❌ Error extracting profile information:', error);
     }
   }
 
