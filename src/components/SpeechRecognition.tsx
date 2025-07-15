@@ -8,6 +8,7 @@ interface SpeechRecognitionProps {
   onTextChange: (text: string) => void;
   text: string;
   onListeningChange?: (isListening: boolean) => void;
+  onSpeechComplete?: () => void;
 }
 
 interface SpeechRecognitionHandle {
@@ -16,7 +17,7 @@ interface SpeechRecognitionHandle {
   clearText: () => void;
 }
 
-const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionProps>(({ onTextChange, text, onListeningChange }, ref) => {
+const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionProps>(({ onTextChange, text, onListeningChange, onSpeechComplete }, ref) => {
   const [permissionStatus, setPermissionStatus] = useState('unknown');
   const [isAvailable, setIsAvailable] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -72,6 +73,11 @@ const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionP
         accumulatedFinalTextRef.current = '';
         interimTextRef.current = '';
         setTranscript('');
+        
+        // Notify that speech is complete
+        if (onSpeechComplete) {
+          onSpeechComplete();
+        }
       }
     } finally {
       isProcessingRef.current = false;

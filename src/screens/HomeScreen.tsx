@@ -7,10 +7,16 @@ import ProfileIcon from '../components/ProfileIcon';
 export default function HomeScreen() {
   const [speechText, setSpeechText] = useState('');
   const [isListening, setIsListening] = useState(false);
+  const [speechCompleted, setSpeechCompleted] = useState(false);
   const speechRecognitionRef = useRef<any>(null);
 
   const handleSpeechTextChange = (newText: string) => {
     setSpeechText(newText);
+    setSpeechCompleted(false);
+  };
+
+  const handleSpeechComplete = () => {
+    setSpeechCompleted(true);
   };
 
   const handleStartListening = () => {
@@ -27,6 +33,7 @@ export default function HomeScreen() {
 
   const handleClearText = () => {
     setSpeechText('');
+    setSpeechCompleted(false);
     if (speechRecognitionRef.current) {
       speechRecognitionRef.current.clearText();
     }
@@ -45,6 +52,7 @@ export default function HomeScreen() {
           onTextChange={handleSpeechTextChange} 
           text={speechText}
           onListeningChange={setIsListening}
+          onSpeechComplete={handleSpeechComplete}
           ref={speechRecognitionRef}
         />
         
@@ -54,6 +62,7 @@ export default function HomeScreen() {
           onStartListening={handleStartListening}
           onStopListening={handleStopListening}
           onClearText={handleClearText}
+          speechCompleted={speechCompleted}
         />
       </ScrollView>
     </KeyboardAvoidingView>
