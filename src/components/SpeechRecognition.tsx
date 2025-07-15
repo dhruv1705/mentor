@@ -27,7 +27,6 @@ const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionP
   const [countdown, setCountdown] = useState(0);
   const [supportsOnDevice, setSupportsOnDevice] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState('en-US');
-  const [showSettings, setShowSettings] = useState(false);
   
   // Use refs for reliable access to current values (prevents race conditions)
   const interimTextRef = useRef('');
@@ -445,57 +444,6 @@ const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionP
         </Text>
       )}
       
-      {/* Settings Button */}
-      <TouchableOpacity style={styles.settingsButton} onPress={() => setShowSettings(!showSettings)}>
-        <Text style={styles.settingsButtonText}>
-          ⚙️ Settings {showSettings ? '▼' : '▶'}
-        </Text>
-      </TouchableOpacity>
-      
-      {/* Collapsible Settings Section */}
-      {showSettings && (
-        <View style={styles.settingsContainer}>
-          {permissionStatus !== 'granted' && (
-            <TouchableOpacity style={styles.permissionButton} onPress={requestPermissions}>
-              <Text style={styles.permissionButtonText}>🎤 Request Mic Permission</Text>
-            </TouchableOpacity>
-          )}
-          
-          <View style={styles.languageContainer}>
-            <Text style={styles.languageLabel}>Language:</Text>
-            <View style={styles.languageButtons}>
-              {[
-                { code: 'en-US', label: '🇺🇸 US English' },
-                { code: 'en-GB', label: '🇬🇧 UK English' },
-                { code: 'en-AU', label: '🇦🇺 Australian' },
-                { code: 'en-CA', label: '🇨🇦 Canadian' }
-              ].map((lang) => (
-                <TouchableOpacity
-                  key={lang.code}
-                  style={[
-                    styles.languageButton,
-                    selectedLanguage === lang.code && styles.languageButtonSelected
-                  ]}
-                  onPress={() => setSelectedLanguage(lang.code)}
-                >
-                  <Text style={[
-                    styles.languageButtonText,
-                    selectedLanguage === lang.code && styles.languageButtonTextSelected
-                  ]}>
-                    {lang.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-          
-          {supportsOnDevice && (
-            <Text style={[styles.status, styles.statusGood]}>
-              📱 On-device Recognition: Available
-            </Text>
-          )}
-        </View>
-      )}
       
       {/* 3D Voice Assistant Orb */}
       <View style={styles.orbContainer}>
@@ -561,40 +509,6 @@ const styles = StyleSheet.create({
     color: '#FF3B30',
     fontWeight: 'bold',
   },
-  settingsButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 6,
-    marginBottom: 10,
-    alignSelf: 'center',
-  },
-  settingsButtonText: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-  },
-  settingsContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 8,
-    padding: 15,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  permissionButton: {
-    backgroundColor: '#00ccff',
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    borderRadius: 8,
-    marginBottom: 15,
-  },
-  permissionButtonText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
   orbContainer: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -614,43 +528,6 @@ const styles = StyleSheet.create({
   loadingSubtext: {
     fontSize: 14,
     color: '#FFFFFF',
-  },
-  languageContainer: {
-    marginBottom: 20,
-    width: '100%',
-  },
-  languageLabel: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  languageButtons: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  languageButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  languageButtonSelected: {
-    backgroundColor: '#00ccff',
-    borderColor: '#00ccff',
-  },
-  languageButtonText: {
-    fontSize: 12,
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-  },
-  languageButtonTextSelected: {
-    color: 'white',
   },
   warning: {
     color: '#FF9500',

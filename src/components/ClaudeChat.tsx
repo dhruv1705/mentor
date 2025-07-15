@@ -4,6 +4,7 @@ import { claudeApi, ClaudeMessage } from '../services/claudeApi';
 import { ttsService, TTSStatus } from '../services/ttsService';
 import { useAuth } from '../contexts/AuthContext';
 import { ProfileCompletion } from './ProfileCompletion';
+import { Feather } from '@expo/vector-icons';
 
 interface ClaudeChatProps {
   initialText: string;
@@ -322,6 +323,13 @@ export default function ClaudeChat({ initialText, isListening, onStartListening,
           />
           <View style={styles.inputButtons}>
             <TouchableOpacity
+              style={[styles.inputIconButton, (!inputText.trim() || isLoading) && styles.disabledIconButton]}
+              onPress={sendMessage}
+              disabled={!inputText.trim() || isLoading}
+            >
+              <Feather name="send" size={20} color={(!inputText.trim() || isLoading) ? '#8E8E93' : '#00ccff'} />
+            </TouchableOpacity>
+            <TouchableOpacity
               style={styles.micButton}
               onPress={isListening ? onStopListening : onStartListening}
             >
@@ -480,7 +488,7 @@ const styles = StyleSheet.create({
     borderColor: '#00ccff',
     borderRadius: 12,
     padding: 15,
-    paddingRight: 60,
+    paddingRight: 100,
     fontSize: 16,
     maxHeight: 100,
     textAlignVertical: 'top',
@@ -495,6 +503,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
+  },
+  inputIconButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 36,
+    minHeight: 36,
+  },
+  disabledIconButton: {
+    opacity: 0.6,
   },
   micButton: {
     paddingHorizontal: 8,
