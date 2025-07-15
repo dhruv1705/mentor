@@ -1,13 +1,18 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Switch, Alert } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Switch, Alert, TextInput, Modal } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import ProfileIcon from '../components/ProfileIcon';
 import { ttsService } from '../services/ttsService';
 import { useAuth } from '../contexts/AuthContext';
+import { ProfileCompletion } from '../components/ProfileCompletion';
+import { GENDER_OPTIONS, ProfileUpdateData } from '../types/profile';
 
 export default function ProfileScreen() {
   const [settings, setSettings] = useState(ttsService.getSettings());
-  const { user, signOut } = useAuth();
+  const { user, profile, signOut, updateProfileField } = useAuth();
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const [modalVisible, setModalVisible] = useState(false);
 
   const updateTTSSetting = (key: keyof typeof settings, value: any) => {
     const newSettings = { ...settings, [key]: value };
@@ -26,6 +31,105 @@ export default function ProfileScreen() {
     );
   };
 
+  const handleFieldEdit = (field: string) => {
+    const currentValue = profile?.[field as keyof typeof profile] || '';
+    setEditValue(String(currentValue));
+    setEditingField(field);
+    setModalVisible(true);
+  };
+
+  const handleSaveField = async () => {
+    if (!editingField) return;
+
+    let processedValue: any = editValue;
+
+    // Process the value based on field type
+    if (editingField === 'age') {
+      processedValue = parseInt(editValue);
+      if (isNaN(processedValue) || processedValue < 1 || processedValue > 120) {
+        Alert.alert('Invalid Age', 'Please enter a valid age between 1 and 120');
+        return;
+      }
+    } else if (editingField === 'height') {
+      processedValue = parseInt(editValue);
+      if (isNaN(processedValue) || processedValue < 50 || processedValue > 300) {
+        Alert.alert('Invalid Height', 'Please enter a valid height between 50 and 300 cm');
+        return;
+      }
+    }
+
+    const success = await updateProfileField(editingField as keyof ProfileUpdateData, processedValue);
+    
+    if (success) {
+      setModalVisible(false);
+      setEditingField(null);
+      setEditValue('');
+    } else {
+      Alert.alert('Error', 'Failed to update profile. Please try again.');
+    }
+  };
+
+  const renderEditModal = () => (
+    <Modal
+      animationType="slide"
+      transparent={true}
+      visible={modalVisible}
+      onRequestClose={() => setModalVisible(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Edit {editingField}</Text>
+          
+          {editingField === 'gender' ? (
+            <View style={styles.genderOptions}>
+              {GENDER_OPTIONS.map((option) => (
+                <TouchableOpacity
+                  key={option.value}
+                  style={[
+                    styles.genderOption,
+                    editValue === option.value && styles.genderOptionSelected
+                  ]}
+                  onPress={() => setEditValue(option.value)}
+                >
+                  <Text style={[
+                    styles.genderOptionText,
+                    editValue === option.value && styles.genderOptionTextSelected
+                  ]}>
+                    {option.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : (
+            <TextInput
+              style={styles.modalInput}
+              value={editValue}
+              onChangeText={setEditValue}
+              placeholder={`Enter ${editingField}`}
+              placeholderTextColor="rgba(255, 255, 255, 0.5)"
+              keyboardType={editingField === 'age' || editingField === 'height' ? 'numeric' : 'default'}
+            />
+          )}
+          
+          <View style={styles.modalButtons}>
+            <TouchableOpacity
+              style={[styles.modalButton, styles.modalButtonCancel]}
+              onPress={() => setModalVisible(false)}
+            >
+              <Text style={styles.modalButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.modalButton, styles.modalButtonSave]}
+              onPress={handleSaveField}
+            >
+              <Text style={styles.modalButtonText}>Save</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
   return (
     <View style={styles.container}>
       <ProfileIcon />
@@ -36,9 +140,12 @@ export default function ProfileScreen() {
           <View style={styles.profileImageContainer}>
             <Feather name="user" size={60} color="#00ccff" />
           </View>
-          <Text style={styles.profileName}>{user?.user_metadata?.full_name || 'Voice Assistant User'}</Text>
+          <Text style={styles.profileName}>{profile?.name || user?.user_metadata?.full_name || 'Voice Assistant User'}</Text>
           <Text style={styles.profileEmail}>{user?.email || 'user@voiceassistant.app'}</Text>
         </View>
+
+        {/* Profile Completion */}
+        <ProfileCompletion onFieldPress={handleFieldEdit} />
 
         {/* TTS Settings Section */}
         <View style={styles.section}>
@@ -154,6 +261,7 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+      {renderEditModal()}
     </View>
   );
 }
@@ -265,5 +373,80 @@ const styles = StyleSheet.create({
   menuValue: {
     fontSize: 16,
     color: 'rgba(255, 255, 255, 0.7)',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 16,
+    padding: 24,
+    width: '80%',
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 20,
+    textAlign: 'center',
+    textTransform: 'capitalize',
+  },
+  modalInput: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    color: '#FFFFFF',
+    marginBottom: 20,
+  },
+  genderOptions: {
+    marginBottom: 20,
+  },
+  genderOption: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  genderOptionSelected: {
+    backgroundColor: 'rgba(0, 204, 255, 0.2)',
+    borderColor: '#00ccff',
+  },
+  genderOptionText: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.7)',
+    textAlign: 'center',
+  },
+  genderOptionTextSelected: {
+    color: '#00ccff',
+    fontWeight: '600',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  modalButtonCancel: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  modalButtonSave: {
+    backgroundColor: '#00ccff',
+  },
+  modalButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });

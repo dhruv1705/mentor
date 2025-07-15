@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { claudeApi, ClaudeMessage } from '../services/claudeApi';
 import { ttsService, TTSStatus } from '../services/ttsService';
+import { useAuth } from '../contexts/AuthContext';
+import { ProfileCompletion } from './ProfileCompletion';
 
 interface ClaudeChatProps {
   initialText: string;
@@ -17,6 +19,9 @@ export default function ClaudeChat({ initialText, isListening, onStartListening,
   const [conversation, setConversation] = useState<ClaudeMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [ttsStatus, setTtsStatus] = useState<TTSStatus>(ttsService.getStatus());
+  const [profileUpdateNotification, setProfileUpdateNotification] = useState<string | null>(null);
+
+  const { profile, updateProfileField, getProfileCompletion, refreshProfile } = useAuth();
 
   // Update inputText when initialText prop changes (real-time speech updates)
   useEffect(() => {
@@ -35,6 +40,44 @@ export default function ClaudeChat({ initialText, isListening, onStartListening,
       ttsService.removeStatusListener(handleTtsStatusChange);
     };
   }, []);
+
+  // Set up Claude API context with profile information
+  useEffect(() => {
+    const profileCompletion = getProfileCompletion();
+    claudeApi.setContext({
+      profile,
+      profileCompletion,
+      conversationLength: conversation.length,
+      onProfileUpdate: handleProfileUpdate,
+    });
+  }, [profile, conversation.length]);
+
+  // Handle profile updates from Claude conversations
+  const handleProfileUpdate = async (field: string, value: any): Promise<void> => {
+    try {
+      const success = await updateProfileField(field as any, value);
+      if (success) {
+        // Show notification to user
+        const fieldLabel = field.charAt(0).toUpperCase() + field.slice(1);
+        setProfileUpdateNotification(`${fieldLabel} updated automatically!`);
+        
+        // Auto-hide notification after 3 seconds
+        setTimeout(() => {
+          setProfileUpdateNotification(null);
+        }, 3000);
+
+        // Refresh profile data
+        await refreshProfile();
+      }
+    } catch (error) {
+      console.error('Error updating profile field:', error);
+    }
+  };
+
+  // Clear profile update notification
+  const dismissNotification = () => {
+    setProfileUpdateNotification(null);
+  };
 
   const sendMessage = async () => {
     if (!inputText.trim() || isLoading) return;
@@ -139,6 +182,19 @@ export default function ClaudeChat({ initialText, isListening, onStartListening,
 
   return (
     <View style={styles.container}>
+      
+      {/* Profile Completion - Show when profile is incomplete */}
+      <ProfileCompletion compact={true} />
+
+      {/* Profile Update Notification */}
+      {profileUpdateNotification && (
+        <View style={styles.notificationContainer}>
+          <Text style={styles.notificationText}>{profileUpdateNotification}</Text>
+          <TouchableOpacity onPress={dismissNotification} style={styles.dismissButton}>
+            <Text style={styles.dismissButtonText}>✕</Text>
+          </TouchableOpacity>
+        </View>
+      )}
       
       {error && (
         <View style={styles.errorContainer}>
@@ -271,6 +327,32 @@ const styles = StyleSheet.create({
   retryButtonText: {
     color: 'white',
     fontSize: 12,
+    fontWeight: 'bold',
+  },
+  notificationContainer: {
+    backgroundColor: 'rgba(0, 204, 255, 0.15)',
+    borderWidth: 1,
+    borderColor: '#00ccff',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  notificationText: {
+    color: '#00ccff',
+    fontSize: 14,
+    flex: 1,
+    fontWeight: '600',
+  },
+  dismissButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  dismissButtonText: {
+    color: '#00ccff',
+    fontSize: 16,
     fontWeight: 'bold',
   },
   conversationContainer: {
