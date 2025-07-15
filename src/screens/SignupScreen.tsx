@@ -67,7 +67,7 @@ export const SignupScreen: React.FC = () => {
         <View style={styles.form}>
           <TextInput
             style={styles.input}
-            placeholder="kop@gmail.com"
+            placeholder="email@example.com"
             placeholderTextColor="rgba(255, 255, 255, 0.6)"
             value={email}
             onChangeText={setEmail}
