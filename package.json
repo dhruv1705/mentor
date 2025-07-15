@@ -11,9 +11,11 @@
   "dependencies": {
     "@expo/metro-runtime": "^5.0.4",
     "@expo/vector-icons": "^14.1.0",
+    "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native-community/blur": "^4.4.1",
     "@react-navigation/native": "^7.1.14",
     "@react-navigation/stack": "^7.4.2",
+    "@supabase/supabase-js": "^2.51.0",
     "@types/three": "^0.178.1",
     "axios": "^1.10.0",
     "expo": "~53.0.17",

@@ -35,4 +35,23 @@ if (typeof navigator === 'undefined') {
   };
 }
 
+// Polyfill structuredClone for Supabase compatibility
+if (typeof structuredClone === 'undefined') {
+  (global as any).structuredClone = (obj: any) => {
+    if (obj === null || typeof obj !== 'object') return obj;
+    if (obj instanceof Date) return new Date(obj.getTime());
+    if (obj instanceof Array) return obj.map(item => structuredClone(item));
+    if (typeof obj === 'object') {
+      const cloned: any = {};
+      for (const key in obj) {
+        if (obj.hasOwnProperty(key)) {
+          cloned[key] = structuredClone(obj[key]);
+        }
+      }
+      return cloned;
+    }
+    return obj;
+  };
+}
+
 export {};

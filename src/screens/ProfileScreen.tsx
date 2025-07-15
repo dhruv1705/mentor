@@ -1,16 +1,29 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Switch } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Switch, Alert } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import ProfileIcon from '../components/ProfileIcon';
 import { ttsService } from '../services/ttsService';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function ProfileScreen() {
   const [settings, setSettings] = useState(ttsService.getSettings());
+  const { user, signOut } = useAuth();
 
   const updateTTSSetting = (key: keyof typeof settings, value: any) => {
     const newSettings = { ...settings, [key]: value };
     setSettings(newSettings);
     ttsService.updateSettings({ [key]: value });
+  };
+
+  const handleSignOut = () => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Sign Out', style: 'destructive', onPress: signOut },
+      ]
+    );
   };
 
   return (
@@ -23,8 +36,8 @@ export default function ProfileScreen() {
           <View style={styles.profileImageContainer}>
             <Feather name="user" size={60} color="#00ccff" />
           </View>
-          <Text style={styles.profileName}>Voice Assistant User</Text>
-          <Text style={styles.profileEmail}>user@voiceassistant.app</Text>
+          <Text style={styles.profileName}>{user?.user_metadata?.full_name || 'Voice Assistant User'}</Text>
+          <Text style={styles.profileEmail}>{user?.email || 'user@voiceassistant.app'}</Text>
         </View>
 
         {/* TTS Settings Section */}
@@ -128,6 +141,16 @@ export default function ProfileScreen() {
             <Feather name="shield" size={20} color="#00ccff" style={styles.menuIcon} />
             <Text style={styles.menuText}>Privacy Policy</Text>
             <Feather name="chevron-right" size={16} color="#888" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Account Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>👤 Account</Text>
+          
+          <TouchableOpacity style={styles.menuItem} onPress={handleSignOut}>
+            <Feather name="log-out" size={20} color="#ff4757" style={styles.menuIcon} />
+            <Text style={[styles.menuText, { color: '#ff4757' }]}>Sign Out</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
