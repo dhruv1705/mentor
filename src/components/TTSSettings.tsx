@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, Modal, ScrollView, Alert } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { Slider } from '@react-native-community/slider';
-import { ttsService, TTSSettings } from '../services/ttsService';
+import { ttsService, TTSSettings, TTSProvider } from '../services/ttsService';
 import * as Speech from 'expo-speech';
 
 interface TTSSettingsProps {
@@ -14,6 +14,7 @@ export default function TTSSettingsModal({ visible, onClose }: TTSSettingsProps)
   const [settings, setSettings] = useState<TTSSettings>(ttsService.getSettings());
   const [availableVoices, setAvailableVoices] = useState<Speech.Voice[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [elevenLabsAvailable, setElevenLabsAvailable] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -25,8 +26,9 @@ export default function TTSSettingsModal({ visible, onClose }: TTSSettingsProps)
   const loadVoices = async () => {
     try {
       setIsLoading(true);
-      const voices = await ttsService.getAvailableVoices();
-      setAvailableVoices(voices);
+      const voiceInfo = await ttsService.getVoiceInfo();
+      setAvailableVoices(voiceInfo.allVoices);
+      setElevenLabsAvailable(voiceInfo.elevenLabsAvailable);
     } catch (error) {
       console.error('Failed to load voices:', error);
       Alert.alert('Error', 'Failed to load available voices');
@@ -60,11 +62,13 @@ export default function TTSSettingsModal({ visible, onClose }: TTSSettingsProps)
           text: 'Reset',
           onPress: () => {
             const defaultSettings: TTSSettings = {
+              provider: 'system',
               rate: 1.0,
               pitch: 1.0,
               voice: undefined,
               language: 'en-US',
-              autoPlay: true
+              autoPlay: true,
+              elevenLabsVoiceId: undefined
             };
             setSettings(defaultSettings);
             ttsService.updateSettings(defaultSettings);
@@ -107,6 +111,50 @@ export default function TTSSettingsModal({ visible, onClose }: TTSSettingsProps)
         </View>
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          {/* TTS Provider Selection */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>TTS Provider</Text>
+            <View style={styles.providerContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.providerButton,
+                  settings.provider === 'system' && styles.providerButtonActive
+                ]}
+                onPress={() => updateSetting('provider', 'system')}
+              >
+                <Text style={[
+                  styles.providerButtonText,
+                  settings.provider === 'system' && styles.providerButtonTextActive
+                ]}>
+                  📱 System TTS
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[
+                  styles.providerButton,
+                  settings.provider === 'elevenlabs' && styles.providerButtonActive,
+                  !elevenLabsAvailable && styles.providerButtonDisabled
+                ]}
+                onPress={() => elevenLabsAvailable && updateSetting('provider', 'elevenlabs')}
+                disabled={!elevenLabsAvailable}
+              >
+                <Text style={[
+                  styles.providerButtonText,
+                  settings.provider === 'elevenlabs' && styles.providerButtonTextActive,
+                  !elevenLabsAvailable && styles.providerButtonTextDisabled
+                ]}>
+                  🎭 ElevenLabs {!elevenLabsAvailable && '(API Key Required)'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            {settings.provider === 'elevenlabs' && (
+              <Text style={styles.providerNote}>
+                Enhanced voice quality with AI-powered speech synthesis
+              </Text>
+            )}
+          </View>
+
           {/* Auto-play Setting */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Auto-play Responses</Text>
@@ -136,9 +184,10 @@ export default function TTSSettingsModal({ visible, onClose }: TTSSettingsProps)
             </View>
           </View>
 
-          {/* Voice Selection */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Voice</Text>
+          {/* Voice Selection - Only show for System TTS */}
+          {settings.provider === 'system' && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Voice</Text>
             {isLoading ? (
               <Text style={styles.loadingText}>Loading voices...</Text>
             ) : (
@@ -159,11 +208,13 @@ export default function TTSSettingsModal({ visible, onClose }: TTSSettingsProps)
                 </Picker>
               </View>
             )}
-          </View>
+            </View>
+          )}
 
-          {/* Speech Rate */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Speech Rate: {settings.rate.toFixed(1)}x</Text>
+          {/* Speech Rate - Only show for System TTS */}
+          {settings.provider === 'system' && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Speech Rate: {settings.rate.toFixed(1)}x</Text>
             <Slider
               style={styles.slider}
               minimumValue={0.5}
@@ -175,15 +226,17 @@ export default function TTSSettingsModal({ visible, onClose }: TTSSettingsProps)
               maximumTrackTintColor="#E0E0E0"
               thumbTintColor="#007AFF"
             />
-            <View style={styles.sliderLabels}>
-              <Text style={styles.sliderLabel}>Slow</Text>
-              <Text style={styles.sliderLabel}>Fast</Text>
+              <View style={styles.sliderLabels}>
+                <Text style={styles.sliderLabel}>Slow</Text>
+                <Text style={styles.sliderLabel}>Fast</Text>
+              </View>
             </View>
-          </View>
+          )}
 
-          {/* Speech Pitch */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Speech Pitch: {settings.pitch.toFixed(1)}x</Text>
+          {/* Speech Pitch - Only show for System TTS */}
+          {settings.provider === 'system' && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Speech Pitch: {settings.pitch.toFixed(1)}x</Text>
             <Slider
               style={styles.slider}
               minimumValue={0.5}
@@ -195,16 +248,19 @@ export default function TTSSettingsModal({ visible, onClose }: TTSSettingsProps)
               maximumTrackTintColor="#E0E0E0"
               thumbTintColor="#007AFF"
             />
-            <View style={styles.sliderLabels}>
-              <Text style={styles.sliderLabel}>Low</Text>
-              <Text style={styles.sliderLabel}>High</Text>
+              <View style={styles.sliderLabels}>
+                <Text style={styles.sliderLabel}>Low</Text>
+                <Text style={styles.sliderLabel}>High</Text>
+              </View>
             </View>
-          </View>
+          )}
 
           {/* Action Buttons */}
           <View style={styles.buttonSection}>
             <TouchableOpacity style={styles.testButton} onPress={testVoice}>
-              <Text style={styles.testButtonText}>🎤 Test Voice</Text>
+              <Text style={styles.testButtonText}>
+                {settings.provider === 'elevenlabs' ? '🎭 Test ElevenLabs Voice' : '🎤 Test System Voice'}
+              </Text>
             </TouchableOpacity>
             
             <TouchableOpacity style={styles.resetButton} onPress={resetToDefaults}>
@@ -332,5 +388,46 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  providerContainer: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  providerButton: {
+    flex: 1,
+    backgroundColor: '#E0E0E0',
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  providerButtonActive: {
+    backgroundColor: '#007AFF',
+    borderColor: '#0051D5',
+  },
+  providerButtonDisabled: {
+    backgroundColor: '#F0F0F0',
+    opacity: 0.6,
+  },
+  providerButtonText: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  providerButtonTextActive: {
+    color: 'white',
+  },
+  providerButtonTextDisabled: {
+    color: '#999',
+  },
+  providerNote: {
+    fontSize: 12,
+    color: '#007AFF',
+    marginTop: 8,
+    fontStyle: 'italic',
+    textAlign: 'center',
   },
 });

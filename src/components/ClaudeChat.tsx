@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { claudeApi, ClaudeMessage } from '../services/claudeApi';
-import { ttsService, TTSStatus } from '../services/ttsService';
+import { ttsService, TTSStatus, TTSProvider, TTSSettings } from '../services/ttsService';
 import { useAuth } from '../contexts/AuthContext';
 import { ProfileCompletion } from './ProfileCompletion';
 import { Feather } from '@expo/vector-icons';
@@ -25,6 +25,8 @@ export default function ClaudeChat({ initialText, isListening, onStartListening,
   const [autoSendEnabled, setAutoSendEnabled] = useState(true);
   const [autoSendCountdown, setAutoSendCountdown] = useState(0);
   const [autoSendTimeoutId, setAutoSendTimeoutId] = useState<NodeJS.Timeout | null>(null);
+  const [currentTtsProvider, setCurrentTtsProvider] = useState<TTSProvider>('system');
+  const [elevenLabsAvailable, setElevenLabsAvailable] = useState(false);
 
   const { profile, updateProfileField, getProfileCompletion, refreshProfile } = useAuth();
 
@@ -58,12 +60,19 @@ export default function ClaudeChat({ initialText, isListening, onStartListening,
     }
   }, [autoSendCountdown]);
 
-  // Set up TTS status listener
+  // Set up TTS status listener and load TTS info
   useEffect(() => {
     const handleTtsStatusChange = (status: TTSStatus) => {
       setTtsStatus(status);
     };
 
+    const loadTtsInfo = async () => {
+      const settings = ttsService.getSettings();
+      setCurrentTtsProvider(settings.provider);
+      setElevenLabsAvailable(ttsService.isElevenLabsAvailable());
+    };
+
+    loadTtsInfo();
     ttsService.addStatusListener(handleTtsStatusChange);
     
     return () => {
@@ -187,6 +196,30 @@ export default function ClaudeChat({ initialText, isListening, onStartListening,
     ttsService.updateSettings({ autoPlay: !settings.autoPlay });
   };
 
+  // Toggle TTS provider
+  const toggleTtsProvider = () => {
+    const newProvider: TTSProvider = currentTtsProvider === 'system' ? 'elevenlabs' : 'system';
+    if (newProvider === 'elevenlabs' && !elevenLabsAvailable) {
+      Alert.alert(
+        'ElevenLabs Unavailable',
+        'ElevenLabs API key is not configured. Please add your API key to use ElevenLabs TTS.',
+        [{ text: 'OK', style: 'default' }]
+      );
+      return;
+    }
+    
+    ttsService.switchProvider(newProvider);
+    setCurrentTtsProvider(newProvider);
+    
+    // Show feedback
+    const providerName = newProvider === 'elevenlabs' ? 'ElevenLabs' : 'System TTS';
+    Alert.alert(
+      'TTS Provider Changed',
+      `Switched to ${providerName}`,
+      [{ text: 'OK', style: 'default' }]
+    );
+  };
+
   const startAutoSendTimer = () => {
     // Clear any existing timer
     if (autoSendTimeoutId) {
@@ -239,6 +272,36 @@ export default function ClaudeChat({ initialText, isListening, onStartListening,
 
   return (
     <View style={styles.container}>
+      
+      {/* TTS Provider Toggle */}
+      <View style={styles.ttsToggleContainer}>
+        <TouchableOpacity 
+          style={[
+            styles.ttsToggleButton,
+            !elevenLabsAvailable && styles.ttsToggleButtonDisabled
+          ]} 
+          onPress={toggleTtsProvider}
+          disabled={!elevenLabsAvailable && currentTtsProvider === 'system'}
+        >
+          <Text style={styles.ttsToggleLabel}>TTS:</Text>
+          <View style={styles.ttsToggleOptions}>
+            <Text style={[
+              styles.ttsToggleOption,
+              currentTtsProvider === 'system' && styles.ttsToggleOptionActive
+            ]}>
+              📱 System
+            </Text>
+            <Text style={styles.ttsToggleDivider}>|</Text>
+            <Text style={[
+              styles.ttsToggleOption,
+              currentTtsProvider === 'elevenlabs' && styles.ttsToggleOptionActive,
+              !elevenLabsAvailable && styles.ttsToggleOptionDisabled
+            ]}>
+              🎭 ElevenLabs
+            </Text>
+          </View>
+        </TouchableOpacity>
+      </View>
       
       {/* Profile Completion - Show when profile is incomplete */}
       <ProfileCompletion compact={true} />
@@ -339,23 +402,13 @@ export default function ClaudeChat({ initialText, isListening, onStartListening,
             </TouchableOpacity>
           </View>
         </View>
-        <View style={styles.buttonRow}>
-          <TouchableOpacity
-            style={[styles.sendButton, (!inputText.trim() || isLoading) && styles.disabledButton]}
-            onPress={sendMessage}
-            disabled={!inputText.trim() || isLoading}
-          >
-            <Text style={styles.sendButtonText}>
-              {autoSendCountdown > 0 ? `📤 Auto-send in ${autoSendCountdown}s` : '📤 Send'}
-            </Text>
-          </TouchableOpacity>
-          
-          {conversation.length > 0 && (
+        {conversation.length > 0 && (
+          <View style={styles.buttonRow}>
             <TouchableOpacity style={styles.clearButton} onPress={clearConversation}>
               <Text style={styles.clearButtonText}>🗑️ Clear Chat</Text>
             </TouchableOpacity>
-          )}
-        </View>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -532,35 +585,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  sendButton: {
-    backgroundColor: '#00ccff',
-    paddingHorizontal: 25,
-    paddingVertical: 15,
-    borderRadius: 12,
-    flex: 1,
-    marginRight: 10,
-    shadowColor: '#00ccff',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  sendButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
   clearButton: {
-    backgroundColor: '#FF9500',
-    paddingHorizontal: 15,
-    paddingVertical: 15,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
     borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   clearButtonText: {
-    color: 'white',
+    color: 'rgba(255, 255, 255, 0.8)',
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '600',
   },
   disabledButton: {
     backgroundColor: '#8E8E93',
@@ -586,5 +624,49 @@ const styles = StyleSheet.create({
   ttsButtonText: {
     color: 'white',
     fontSize: 12,
+  },
+  ttsToggleContainer: {
+    marginBottom: 15,
+    alignItems: 'center',
+  },
+  ttsToggleButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 12,
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  ttsToggleButtonDisabled: {
+    opacity: 0.6,
+  },
+  ttsToggleLabel: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  ttsToggleOptions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  ttsToggleOption: {
+    color: 'rgba(255, 255, 255, 0.6)',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  ttsToggleOptionActive: {
+    color: '#00ccff',
+    fontWeight: '700',
+  },
+  ttsToggleOptionDisabled: {
+    color: 'rgba(255, 255, 255, 0.3)',
+  },
+  ttsToggleDivider: {
+    color: 'rgba(255, 255, 255, 0.4)',
+    fontSize: 14,
   },
 });

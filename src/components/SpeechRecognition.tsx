@@ -424,10 +424,14 @@ const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionP
     <View style={styles.container}>      
       {/* Smart Status Display - Only show when there are issues */}
       {(permissionStatus !== 'granted' || !isAvailable) && (
-        <View style={styles.statusContainer}>
+        <TouchableOpacity 
+          style={styles.statusContainer}
+          onPress={requestPermissions}
+          activeOpacity={0.7}
+        >
           {permissionStatus !== 'granted' && (
             <Text style={[styles.status, styles.statusBad]}>
-              ❌ Permission: {permissionStatus}
+              ❌ Permission: denied
             </Text>
           )}
           {!isAvailable && (
@@ -435,7 +439,12 @@ const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionP
               ❌ Speech Recognition: Not Available
             </Text>
           )}
-        </View>
+          {permissionStatus !== 'granted' && (
+            <Text style={styles.tapToAllowText}>
+              Tap to allow permissions
+            </Text>
+          )}
+        </TouchableOpacity>
       )}
       
       {!isAvailable && (
@@ -583,5 +592,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#FFFFFF',
     fontStyle: 'italic',
+  },
+  tapToAllowText: {
+    fontSize: 12,
+    color: '#007AFF',
+    textAlign: 'center',
+    marginTop: 5,
+    fontWeight: '600',
   },
 });
