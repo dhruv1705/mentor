@@ -113,7 +113,7 @@ IMPORTANT GUIDELINES:
       
       // Process gender
       if (genderExtraction.value && genderExtraction.confidence > 0.5) {
-        const hasGender = this.context.profile?.gender && this.context.profile.gender !== 'Not specified';
+        const hasGender = this.context.profile?.gender;
         console.log('🔍 Gender check - hasGender:', hasGender, 'current profile gender:', this.context.profile?.gender);
         
         if (!hasGender) {
