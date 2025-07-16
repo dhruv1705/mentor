@@ -48,7 +48,8 @@
     "extra": {
       "eas": {
         "projectId": "da3bd9be-3d83-42ff-9250-94edcdc00465"
-      }
+      },
+      "ELEVENLABS_API_KEY": "${ELEVENLABS_API_KEY}"
     }
   }
 }

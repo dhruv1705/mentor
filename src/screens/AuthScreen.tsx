@@ -38,7 +38,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     paddingVertical: 20,
-    paddingBottom: 40,
+    paddingBottom: 60,
+    paddingHorizontal: 20,
   },
   switchText: {
     color: 'rgba(255, 255, 255, 0.7)',

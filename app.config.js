@@ -1,0 +1,61 @@
+import 'dotenv/config';
+
+export default {
+  expo: {
+    name: 'simple-text-app',
+    slug: 'simple-text-app',
+    version: '1.0.0',
+    orientation: 'portrait',
+    icon: './assets/icon.png',
+    userInterfaceStyle: 'light',
+    newArchEnabled: true,
+    plugins: [
+      [
+        'expo-speech-recognition',
+        {
+          microphonePermission: 'Allow this app to access your microphone for speech recognition.',
+          speechRecognitionPermission: 'Allow this app to access speech recognition.'
+        }
+      ]
+    ],
+    splash: {
+      image: './assets/splash-icon.png',
+      resizeMode: 'contain',
+      backgroundColor: '#ffffff'
+    },
+    ios: {
+      supportsTablet: true,
+      infoPlist: {
+        NSSpeechRecognitionUsageDescription: 'Allow this app to access speech recognition.',
+        NSMicrophoneUsageDescription: 'Allow this app to access your microphone for speech recognition.'
+      },
+      bundleIdentifier: 'com.zolatte.simpletextapp'
+    },
+    android: {
+      adaptiveIcon: {
+        foregroundImage: './assets/adaptive-icon.png',
+        backgroundColor: '#ffffff'
+      },
+      edgeToEdgeEnabled: true,
+      permissions: [
+        'android.permission.RECORD_AUDIO',
+        'android.permission.INTERNET',
+        'android.permission.ACCESS_NETWORK_STATE',
+        'android.permission.WRITE_EXTERNAL_STORAGE'
+      ],
+      package: 'com.zolatte.simpletextapp'
+    },
+    web: {
+      favicon: './assets/favicon.png'
+    },
+    extra: {
+      eas: {
+        projectId: 'da3bd9be-3d83-42ff-9250-94edcdc00465'
+      },
+      ELEVENLABS_API_KEY: process.env.ELEVENLABS_API_KEY,
+      CLAUDE_API_KEY: process.env.CLAUDE_API_KEY,
+      SUPABASE_URL: process.env.SUPABASE_URL,
+      SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY
+    }
+  }
+};

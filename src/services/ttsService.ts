@@ -1,11 +1,17 @@
 import * as Speech from 'expo-speech';
+import Constants from 'expo-constants';
+import { Audio } from 'expo-av';
+
+export type TTSProvider = 'system' | 'elevenlabs';
 
 export interface TTSSettings {
+  provider: TTSProvider;
   rate: number;
   pitch: number;
   language: string;
   voice?: string;
   autoPlay: boolean;
+  elevenLabsVoiceId?: string;
 }
 
 export interface TTSStatus {
@@ -15,12 +21,31 @@ export interface TTSStatus {
 
 export class TTSService {
   private settings: TTSSettings = {
+    provider: 'system',
     rate: 1.0,
     pitch: 1.0,
     language: 'en-US',
     voice: undefined,
     autoPlay: true,
+    elevenLabsVoiceId: undefined,
   };
+
+  private elevenLabsApiKey: string | null = null;
+  private currentElevenLabsSound: Audio.Sound | null = null;
+
+  // Convert ArrayBuffer to base64 using chunked approach to avoid stack overflow
+  private arrayBufferToBase64(buffer: ArrayBuffer): string {
+    const bytes = new Uint8Array(buffer);
+    const chunkSize = 8192; // Process in smaller chunks to avoid call stack limits
+    let binary = '';
+    
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      const chunk = bytes.slice(i, i + chunkSize);
+      binary += String.fromCharCode.apply(null, Array.from(chunk));
+    }
+    
+    return btoa(binary);
+  }
 
   private status: TTSStatus = {
     isPlaying: false,
@@ -43,40 +68,11 @@ export class TTSService {
       };
       this.notifyStatusListeners();
 
-      // Start speaking using VoiceAssistantOrb's proven approach
-      await Speech.speak(text, {
-        rate: this.settings.rate,
-        pitch: this.settings.pitch,
-        language: this.settings.language,
-        voice: this.settings.voice,
-        onStart: () => {
-          console.log('TTS started');
-        },
-        onDone: () => {
-          console.log('TTS finished');
-          this.status = {
-            isPlaying: false,
-            currentText: null,
-          };
-          this.notifyStatusListeners();
-        },
-        onStopped: () => {
-          console.log('TTS stopped');
-          this.status = {
-            isPlaying: false,
-            currentText: null,
-          };
-          this.notifyStatusListeners();
-        },
-        onError: (error) => {
-          console.error('TTS error:', error);
-          this.status = {
-            isPlaying: false,
-            currentText: null,
-          };
-          this.notifyStatusListeners();
-        },
-      });
+      if (this.settings.provider === 'elevenlabs') {
+        await this.speakWithElevenLabs(text);
+      } else {
+        await this.speakWithSystem(text);
+      }
     } catch (error) {
       console.error('TTS speak error:', error);
       this.status = {
@@ -84,20 +80,194 @@ export class TTSService {
         currentText: null,
       };
       this.notifyStatusListeners();
+      // Fallback to system TTS on ElevenLabs error
+      if (this.settings.provider === 'elevenlabs') {
+        // Falling back to system TTS
+        try {
+          await this.speakWithSystem(text);
+        } catch (fallbackError) {
+          // Fallback error handled
+          throw fallbackError;
+        }
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  private async speakWithSystem(text: string): Promise<void> {
+    await Speech.speak(text, {
+      rate: this.settings.rate,
+      pitch: this.settings.pitch,
+      language: this.settings.language,
+      voice: this.settings.voice,
+      onStart: () => {
+        // TTS started
+      },
+      onDone: () => {
+        this.status = {
+          isPlaying: false,
+          currentText: null,
+        };
+        this.notifyStatusListeners();
+      },
+      onStopped: () => {
+        this.status = {
+          isPlaying: false,
+          currentText: null,
+        };
+        this.notifyStatusListeners();
+      },
+      onError: (error) => {
+        this.status = {
+          isPlaying: false,
+          currentText: null,
+        };
+        this.notifyStatusListeners();
+      },
+    });
+  }
+
+  private async speakWithElevenLabs(text: string): Promise<void> {
+    if (!this.elevenLabsApiKey) {
+      this.initializeElevenLabs();
+    }
+
+    if (!this.elevenLabsApiKey) {
+      throw new Error('ElevenLabs API key not available');
+    }
+
+    try {
+      const voiceId = this.settings.elevenLabsVoiceId || '9BWtsMINqrJLrRacOk9x';
+      
+      
+      const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+        method: 'POST',
+        headers: {
+          'Accept': 'audio/mpeg',
+          'Content-Type': 'application/json',
+          'xi-api-key': this.elevenLabsApiKey,
+        },
+        body: JSON.stringify({
+          text,
+          model_id: 'eleven_turbo_v2',
+          voice_settings: {
+            stability: 0.5,
+            similarity_boost: 0.8
+          },
+        }),
+      });
+      
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`ElevenLabs API error: ${response.status} - ${errorText}`);
+      }
+
+      
+      const audioBuffer = await response.arrayBuffer();
+      
+      // Clean up any previous ElevenLabs audio to prevent memory leaks
+      if (this.currentElevenLabsSound) {
+        try {
+          await this.currentElevenLabsSound.unloadAsync();
+        } catch (cleanupError) {
+          // Ignore cleanup errors
+        }
+        this.currentElevenLabsSound = null;
+      }
+      
+      try {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          staysActiveInBackground: false,
+          playsInSilentModeIOS: true,
+          shouldDuckAndroid: true,
+          playThroughEarpieceAndroid: false,
+        });
+        
+        const { sound } = await Audio.Sound.createAsync(
+          {
+            uri: `data:audio/mpeg;base64,${this.arrayBufferToBase64(audioBuffer)}`,
+          },
+          { shouldPlay: false }
+        );
+        
+        // Store reference for stopping
+        this.currentElevenLabsSound = sound;
+        
+        // Mimic system TTS callbacks exactly
+        console.log('ElevenLabs TTS started');
+        
+        sound.setOnPlaybackStatusUpdate((status) => {
+          if (status.isLoaded) {
+            if (status.didJustFinish) {
+              console.log('ElevenLabs TTS finished');
+              this.status = {
+                isPlaying: false,
+                currentText: null,
+              };
+              this.notifyStatusListeners();
+              sound.unloadAsync();
+              this.currentElevenLabsSound = null;
+            }
+          }
+        });
+        
+        await sound.playAsync();
+        
+      } catch (audioError) {
+        console.error('ElevenLabs audio playback error:', audioError);
+        this.status = {
+          isPlaying: false,
+          currentText: null,
+        };
+        this.notifyStatusListeners();
+        throw audioError;
+      }
+      
+    } catch (error) {
+      console.error('ElevenLabs TTS error:', error);
       throw error;
     }
   }
 
+  private initializeElevenLabs(): void {
+    // Try multiple ways to get the API key
+    const apiKey = Constants.expoConfig?.extra?.ELEVENLABS_API_KEY || 
+                   (Constants.manifest as any)?.extra?.ELEVENLABS_API_KEY ||
+                   process.env.ELEVENLABS_API_KEY;
+    
+    console.log('Initializing ElevenLabs with key:', apiKey ? `${apiKey.substring(0, 10)}...` : 'not found');
+    
+    if (!apiKey || apiKey === 'your_elevenlabs_api_key_here') {
+      console.warn('ElevenLabs API key not found or not set');
+      return;
+    }
+
+    this.elevenLabsApiKey = apiKey;
+    console.log('ElevenLabs client initialized successfully');
+  }
+
   async stop(): Promise<void> {
     try {
+      // Stop system TTS
       await Speech.stop();
+      
+      // Stop ElevenLabs audio if playing
+      if (this.currentElevenLabsSound) {
+        await this.currentElevenLabsSound.stopAsync();
+        await this.currentElevenLabsSound.unloadAsync();
+        this.currentElevenLabsSound = null;
+      }
+      
       this.status = {
         isPlaying: false,
         currentText: null,
       };
       this.notifyStatusListeners();
     } catch (error) {
-      console.error('TTS stop error:', error);
+      // Handle stop errors silently
     }
   }
 
@@ -185,12 +355,70 @@ export class TTSService {
   }
 
   async testCurrentSettings(): Promise<void> {
-    const testText = "This is a test of the current speech rate and pitch settings.";
+    const testText = this.settings.provider === 'elevenlabs' 
+      ? "This is a test using ElevenLabs voice synthesis."
+      : "This is a test of the current speech rate and pitch settings.";
     try {
       await this.speak(testText);
     } catch (error) {
-      console.error('TTS test error:', error);
+      // Test error handled by speak method
       throw error;
+    }
+  }
+
+  switchProvider(provider: TTSProvider): void {
+    this.updateSettings({ provider });
+    if (provider === 'elevenlabs' && !this.elevenLabsApiKey) {
+      this.initializeElevenLabs();
+    }
+  }
+
+  isElevenLabsAvailable(): boolean {
+    const apiKey = Constants.expoConfig?.extra?.ELEVENLABS_API_KEY || 
+                   (Constants.manifest as any)?.extra?.ELEVENLABS_API_KEY ||
+                   process.env.ELEVENLABS_API_KEY;
+    const available = !!(apiKey && apiKey !== 'your_elevenlabs_api_key_here');
+    console.log('ElevenLabs availability check:', {
+      hasApiKey: !!apiKey,
+      keyLength: apiKey ? apiKey.length : 0,
+      available
+    });
+    return available;
+  }
+
+  // Test method to verify API connection
+  async testElevenLabsConnection(): Promise<boolean> {
+    if (!this.elevenLabsApiKey) {
+      this.initializeElevenLabs();
+    }
+
+    if (!this.elevenLabsApiKey) {
+      console.error('No ElevenLabs API key available for testing');
+      return false;
+    }
+
+    try {
+      console.log('Testing ElevenLabs connection...');
+      const response = await fetch('https://api.elevenlabs.io/v1/voices', {
+        headers: {
+          'xi-api-key': this.elevenLabsApiKey,
+        },
+      });
+
+      console.log('ElevenLabs test response status:', response.status);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('ElevenLabs test successful, found', data.voices?.length || 0, 'voices');
+        return true;
+      } else {
+        const errorText = await response.text();
+        console.error('ElevenLabs test failed:', response.status, errorText);
+        return false;
+      }
+    } catch (error) {
+      console.error('ElevenLabs test error:', error);
+      return false;
     }
   }
 
@@ -199,6 +427,7 @@ export class TTSService {
     englishVoices: Speech.Voice[];
     allVoices: Speech.Voice[];
     totalVoices: number;
+    elevenLabsAvailable: boolean;
   }> {
     const voices = await this.getAvailableVoices();
     const englishVoices = await this.getEnglishVoices();
@@ -207,7 +436,8 @@ export class TTSService {
       current: this.settings,
       englishVoices,
       allVoices: voices,
-      totalVoices: voices.length
+      totalVoices: voices.length,
+      elevenLabsAvailable: this.isElevenLabsAvailable()
     };
   }
 }
