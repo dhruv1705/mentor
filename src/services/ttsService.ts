@@ -17,6 +17,9 @@ export interface TTSSettings {
 export interface TTSStatus {
   isPlaying: boolean;
   currentText: string | null;
+  currentSentence: string | null;
+  sentenceIndex: number;
+  totalSentences: number;
 }
 
 export class TTSService {
@@ -50,9 +53,59 @@ export class TTSService {
   private status: TTSStatus = {
     isPlaying: false,
     currentText: null,
+    currentSentence: null,
+    sentenceIndex: 0,
+    totalSentences: 0,
   };
 
   private statusListeners: Array<(status: TTSStatus) => void> = [];
+  private sentenceProgressListeners: Array<(sentence: string, index: number, total: number) => void> = [];
+  private currentSentences: string[] = [];
+  private currentSentenceTimeouts: NodeJS.Timeout[] = [];
+
+  // Parse text into sentences
+  private parseSentences(text: string): string[] {
+    return text.split(/(?<=[.!?])\s+/)
+      .filter(sentence => sentence.trim().length > 0)
+      .map(sentence => sentence.trim());
+  }
+
+  // Clear sentence timeouts
+  private clearSentenceTimeouts(): void {
+    this.currentSentenceTimeouts.forEach(timeout => clearTimeout(timeout));
+    this.currentSentenceTimeouts = [];
+  }
+
+  // Start sentence progress tracking
+  private startSentenceProgress(sentences: string[]): void {
+    this.clearSentenceTimeouts();
+    this.currentSentences = sentences;
+    
+    // Estimate timing for each sentence based on word count
+    const avgWordsPerMinute = 150; // Average reading speed
+    const avgWordsPerSecond = avgWordsPerMinute / 60;
+    
+    let cumulativeDelay = 0;
+    
+    sentences.forEach((sentence, index) => {
+      const wordCount = sentence.split(/\s+/).length;
+      const estimatedDuration = (wordCount / avgWordsPerSecond) * 1000; // Convert to ms
+      
+      const timeout = setTimeout(() => {
+        this.status = {
+          ...this.status,
+          currentSentence: sentence,
+          sentenceIndex: index,
+          totalSentences: sentences.length,
+        };
+        this.notifyStatusListeners();
+        this.notifySentenceProgressListeners(sentence, index, sentences.length);
+      }, cumulativeDelay);
+      
+      this.currentSentenceTimeouts.push(timeout);
+      cumulativeDelay += estimatedDuration;
+    });
+  }
 
   async speak(text: string): Promise<void> {
     if (!text.trim()) return;
@@ -61,12 +114,21 @@ export class TTSService {
       // Stop any current speech
       await this.stop();
 
+      // Parse sentences for progress tracking
+      const sentences = this.parseSentences(text);
+      
       // Update status
       this.status = {
         isPlaying: true,
         currentText: text,
+        currentSentence: sentences[0] || null,
+        sentenceIndex: 0,
+        totalSentences: sentences.length,
       };
       this.notifyStatusListeners();
+      
+      // Start sentence progress tracking
+      this.startSentenceProgress(sentences);
 
       if (this.settings.provider === 'elevenlabs') {
         await this.speakWithElevenLabs(text);
@@ -75,9 +137,13 @@ export class TTSService {
       }
     } catch (error) {
       console.error('TTS speak error:', error);
+      this.clearSentenceTimeouts();
       this.status = {
         isPlaying: false,
         currentText: null,
+        currentSentence: null,
+        sentenceIndex: 0,
+        totalSentences: 0,
       };
       this.notifyStatusListeners();
       // Fallback to system TTS on ElevenLabs error
@@ -105,23 +171,35 @@ export class TTSService {
         // TTS started
       },
       onDone: () => {
+        this.clearSentenceTimeouts();
         this.status = {
           isPlaying: false,
           currentText: null,
+          currentSentence: null,
+          sentenceIndex: 0,
+          totalSentences: 0,
         };
         this.notifyStatusListeners();
       },
       onStopped: () => {
+        this.clearSentenceTimeouts();
         this.status = {
           isPlaying: false,
           currentText: null,
+          currentSentence: null,
+          sentenceIndex: 0,
+          totalSentences: 0,
         };
         this.notifyStatusListeners();
       },
       onError: (error) => {
+        this.clearSentenceTimeouts();
         this.status = {
           isPlaying: false,
           currentText: null,
+          currentSentence: null,
+          sentenceIndex: 0,
+          totalSentences: 0,
         };
         this.notifyStatusListeners();
       },
@@ -138,7 +216,7 @@ export class TTSService {
     }
 
     try {
-      const voiceId = this.settings.elevenLabsVoiceId || '9BWtsMINqrJLrRacOk9x';
+      const voiceId = this.settings.elevenLabsVoiceId || 'ynPDxnl9LkoyPcG6LoYS';
       
       
       const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
@@ -203,9 +281,13 @@ export class TTSService {
           if (status.isLoaded) {
             if (status.didJustFinish) {
               console.log('ElevenLabs TTS finished');
+              this.clearSentenceTimeouts();
               this.status = {
                 isPlaying: false,
                 currentText: null,
+                currentSentence: null,
+                sentenceIndex: 0,
+                totalSentences: 0,
               };
               this.notifyStatusListeners();
               sound.unloadAsync();
@@ -218,9 +300,13 @@ export class TTSService {
         
       } catch (audioError) {
         console.error('ElevenLabs audio playback error:', audioError);
+        this.clearSentenceTimeouts();
         this.status = {
           isPlaying: false,
           currentText: null,
+          currentSentence: null,
+          sentenceIndex: 0,
+          totalSentences: 0,
         };
         this.notifyStatusListeners();
         throw audioError;
@@ -261,9 +347,13 @@ export class TTSService {
         this.currentElevenLabsSound = null;
       }
       
+      this.clearSentenceTimeouts();
       this.status = {
         isPlaying: false,
         currentText: null,
+        currentSentence: null,
+        sentenceIndex: 0,
+        totalSentences: 0,
       };
       this.notifyStatusListeners();
     } catch (error) {
@@ -296,6 +386,21 @@ export class TTSService {
 
   private notifyStatusListeners(): void {
     this.statusListeners.forEach(listener => listener(this.status));
+  }
+
+  private notifySentenceProgressListeners(sentence: string, index: number, total: number): void {
+    this.sentenceProgressListeners.forEach(listener => listener(sentence, index, total));
+  }
+
+  addSentenceProgressListener(listener: (sentence: string, index: number, total: number) => void): void {
+    this.sentenceProgressListeners.push(listener);
+  }
+
+  removeSentenceProgressListener(listener: (sentence: string, index: number, total: number) => void): void {
+    const index = this.sentenceProgressListeners.indexOf(listener);
+    if (index > -1) {
+      this.sentenceProgressListeners.splice(index, 1);
+    }
   }
 
   // Additional VoiceAssistantOrb methods for enhanced functionality

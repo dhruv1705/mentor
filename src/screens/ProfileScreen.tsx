@@ -5,6 +5,7 @@ import ProfileIcon from '../components/ProfileIcon';
 import { ttsService } from '../services/ttsService';
 import { useAuth } from '../contexts/AuthContext';
 import { ProfileCompletion } from '../components/ProfileCompletion';
+import { CollapsibleSection } from '../components/CollapsibleSection';
 import { GENDER_OPTIONS, ProfileUpdateData } from '../types/profile';
 
 export default function ProfileScreen() {
@@ -158,12 +159,12 @@ export default function ProfileScreen() {
         </View>
 
         {/* Profile Completion */}
-        <ProfileCompletion onFieldPress={handleFieldEdit} />
+        <CollapsibleSection title="Profile Information" defaultExpanded={true} icon="👤">
+          <ProfileCompletion onFieldPress={handleFieldEdit} collapsible={true} />
+        </CollapsibleSection>
 
         {/* TTS Settings Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>🔊 Text-to-Speech Settings</Text>
-          
+        <CollapsibleSection title="Text-to-Speech Settings" defaultExpanded={true} icon="🔊">
           <View style={styles.settingItem}>
             <Text style={styles.settingLabel}>Auto-play Responses</Text>
             <Switch
@@ -220,12 +221,10 @@ export default function ProfileScreen() {
           <TouchableOpacity style={styles.testButton} onPress={testTTSSettings}>
             <Text style={styles.testButtonText}>🎤 Test Voice Settings</Text>
           </TouchableOpacity>
-        </View>
+        </CollapsibleSection>
 
         {/* App Settings Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>⚙️ App Settings</Text>
-          
+        <CollapsibleSection title="App Settings" defaultExpanded={false} icon="⚙️">
           <TouchableOpacity style={styles.menuItem}>
             <Feather name="moon" size={20} color="#00ccff" style={styles.menuIcon} />
             <Text style={styles.menuText}>Theme</Text>
@@ -243,12 +242,10 @@ export default function ProfileScreen() {
             <Text style={styles.menuText}>Notifications</Text>
             <Text style={styles.menuValue}>Enabled</Text>
           </TouchableOpacity>
-        </View>
+        </CollapsibleSection>
 
         {/* About Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>ℹ️ About</Text>
-          
+        <CollapsibleSection title="About" defaultExpanded={false} icon="ℹ️">
           <TouchableOpacity style={styles.menuItem}>
             <Feather name="info" size={20} color="#00ccff" style={styles.menuIcon} />
             <Text style={styles.menuText}>App Version</Text>
@@ -266,17 +263,15 @@ export default function ProfileScreen() {
             <Text style={styles.menuText}>Privacy Policy</Text>
             <Feather name="chevron-right" size={16} color="#888" />
           </TouchableOpacity>
-        </View>
+        </CollapsibleSection>
 
         {/* Account Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>👤 Account</Text>
-          
+        <CollapsibleSection title="Account" defaultExpanded={false} icon="👤">
           <TouchableOpacity style={styles.menuItem} onPress={handleSignOut}>
             <Feather name="log-out" size={20} color="#ff4757" style={styles.menuIcon} />
             <Text style={[styles.menuText, { color: '#ff4757' }]}>Sign Out</Text>
           </TouchableOpacity>
-        </View>
+        </CollapsibleSection>
       </ScrollView>
       {renderEditModal()}
     </View>
@@ -321,7 +316,7 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.7)',
   },
   section: {
-    marginBottom: 30,
+    marginBottom: 12,
   },
   sectionTitle: {
     fontSize: 18,
