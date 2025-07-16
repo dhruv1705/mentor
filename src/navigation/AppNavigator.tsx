@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from '../contexts/AuthContext';
 import { AuthScreen } from '../screens/AuthScreen';
 import HomeScreen from '../screens/HomeScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import MusicScreen from '../screens/MusicScreen';
 
 const Stack = createStackNavigator();
 
@@ -32,6 +33,7 @@ function AppContent() {
         {user ? (
           <>
             <Stack.Screen name="Home" component={HomeScreen} />
+            <Stack.Screen name="Music" component={MusicScreen} />
             <Stack.Screen name="Profile" component={ProfileScreen} />
           </>
         ) : (
