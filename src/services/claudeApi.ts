@@ -2,6 +2,8 @@ import axios from 'axios';
 import { CLAUDE_API_KEY } from '@env';
 import { UserProfile, ProfileCompletionStatus } from '../types/profile';
 import { ProfileExtractor } from '../utils/profileExtraction';
+import { ScheduleExtractor } from '../utils/scheduleExtraction';
+import { scheduleService } from './scheduleService';
 
 const API_KEY = CLAUDE_API_KEY || '';
 const CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages';
@@ -14,8 +16,10 @@ export interface ClaudeMessage {
 export interface ClaudeConversationContext {
   profile?: UserProfile | null;
   profileCompletion?: ProfileCompletionStatus;
+  schedule?: { weekday: any; weekend: any };
   conversationLength: number;
   onProfileUpdate?: (field: string, value: any) => Promise<void>;
+  onScheduleUpdate?: (scheduleData: any) => Promise<void>;
 }
 
 export interface ClaudeResponse {
@@ -46,13 +50,22 @@ export class ClaudeApiService {
 
   // Generate system prompt with user context
   private generateSystemPrompt(): string {
-    let systemPrompt = `You are a helpful, friendly AI assistant. Your role is to provide clear, concise, and helpful responses while getting to know the user naturally.
+    let systemPrompt = `You are a personal schedule optimization mentor. Your role is to help users improve their daily routine by optimizing 5 key time points:
+
+1. Wake up time
+2. Breakfast time
+3. Lunch time
+4. Dinner time
+5. Sleep time
+
+Your personality is supportive, focused, and data-driven. You ask specific questions about timing, track consistency, and provide gentle optimization suggestions.
 
 IMPORTANT GUIDELINES:
-1. Be conversational and engaging, but not intrusive
-2. If you don't know personal details about the user, you may occasionally ask 1-2 friendly questions to get to know them better
-3. Keep responses helpful and focused on the user's actual questions
-4. Don't overwhelm with too many personal questions at once`;
+1. Focus conversations on schedule optimization and daily routine
+2. Ask specific questions about the 5 time points when appropriate
+3. Provide actionable timing recommendations based on user patterns
+4. Be encouraging about schedule improvements and consistency
+5. Keep responses focused on schedule optimization while being conversational`;
 
     // Add user context if available
     if (this.context?.profile) {
@@ -69,6 +82,31 @@ IMPORTANT GUIDELINES:
       }
     }
 
+    // Add schedule context if available
+    if (this.context?.schedule) {
+      const schedule = this.context.schedule.weekday;
+      if (schedule) {
+        const scheduleInfo: string[] = [];
+        
+        if (schedule.wake_time) scheduleInfo.push(`wake up at ${schedule.wake_time}`);
+        if (schedule.breakfast_time) scheduleInfo.push(`have breakfast at ${schedule.breakfast_time}`);
+        if (schedule.lunch_time) scheduleInfo.push(`have lunch at ${schedule.lunch_time}`);
+        if (schedule.dinner_time) scheduleInfo.push(`have dinner at ${schedule.dinner_time}`);
+        if (schedule.sleep_time) scheduleInfo.push(`go to sleep at ${schedule.sleep_time}`);
+
+        if (scheduleInfo.length > 0) {
+          systemPrompt += `\n\nSCHEDULE CONTEXT: You know that they ${scheduleInfo.join(', ')}. Use this schedule information to provide personalized timing advice and ask relevant follow-up questions about their routine.`;
+          
+          // Add optimization suggestions
+          const optimizations = this.generateScheduleOptimizations(schedule);
+          if (optimizations.length > 0) {
+            systemPrompt += `\n\nSCHEDULE OPTIMIZATION OPPORTUNITIES: ${optimizations.join('; ')}. Mention these improvements naturally when relevant to the conversation.`;
+          }
+        }
+      }
+    }
+
+
     // Add profile completion guidance
     if (this.context?.profileCompletion) {
       const completion = this.context.profileCompletion;
@@ -77,7 +115,136 @@ IMPORTANT GUIDELINES:
       }
     }
 
+
     return systemPrompt;
+  }
+
+  // Generate schedule optimization suggestions
+  private generateScheduleOptimizations(schedule: any): string[] {
+    const optimizations: string[] = [];
+
+    // Helper function to convert time to minutes
+    const timeToMinutes = (timeStr: string): number => {
+      const [hours, minutes] = timeStr.split(':').map(Number);
+      return hours * 60 + minutes;
+    };
+
+    // Helper function to format time for display
+    const formatTime = (minutes: number): string => {
+      const hours = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      const period = hours >= 12 ? 'PM' : 'AM';
+      const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+      return `${displayHours}:${mins.toString().padStart(2, '0')} ${period}`;
+    };
+
+    // Check wake time optimization
+    if (schedule.wake_time) {
+      const wakeMinutes = timeToMinutes(schedule.wake_time);
+      if (wakeMinutes < 360) { // Before 6 AM
+        optimizations.push("Consider waking up slightly later (around 6:30 AM) for better sleep quality");
+      } else if (wakeMinutes > 540) { // After 9 AM
+        optimizations.push("Earlier wake time (around 7:00 AM) can improve productivity and energy");
+      }
+    }
+
+    // Check breakfast timing relative to wake time
+    if (schedule.wake_time && schedule.breakfast_time) {
+      const wakeMinutes = timeToMinutes(schedule.wake_time);
+      const breakfastMinutes = timeToMinutes(schedule.breakfast_time);
+      const timeDiff = breakfastMinutes - wakeMinutes;
+
+      if (timeDiff > 120) { // More than 2 hours
+        const suggestedTime = formatTime(wakeMinutes + 60);
+        optimizations.push(`Try having breakfast within 1-2 hours of waking (around ${suggestedTime}) to boost metabolism`);
+      } else if (timeDiff < 30) { // Less than 30 minutes
+        optimizations.push("Consider waiting 30-60 minutes after waking before eating to aid digestion");
+      }
+    }
+
+    // Check lunch timing
+    if (schedule.lunch_time) {
+      const lunchMinutes = timeToMinutes(schedule.lunch_time);
+      if (lunchMinutes < 660) { // Before 11 AM
+        optimizations.push("Lunch might be too early - consider eating around 12:00-1:00 PM");
+      } else if (lunchMinutes > 840) { // After 2 PM
+        optimizations.push("Late lunch can affect dinner timing - try eating around 12:00-1:00 PM");
+      }
+    }
+
+    // Check dinner and sleep timing
+    if (schedule.dinner_time && schedule.sleep_time) {
+      const dinnerMinutes = timeToMinutes(schedule.dinner_time);
+      const sleepMinutes = timeToMinutes(schedule.sleep_time);
+      let timeDiff = sleepMinutes - dinnerMinutes;
+      
+      // Handle next day sleep time
+      if (timeDiff < 0) {
+        timeDiff += 24 * 60;
+      }
+
+      if (timeDiff < 120) { // Less than 2 hours
+        const suggestedTime = formatTime(sleepMinutes - 180);
+        optimizations.push(`Try eating dinner 3 hours before sleep (around ${suggestedTime}) for better sleep quality`);
+      } else if (timeDiff > 360) { // More than 6 hours
+        optimizations.push("Large gap between dinner and sleep - consider a light snack before bed");
+      }
+    }
+
+    // Check overall sleep time
+    if (schedule.sleep_time) {
+      const sleepMinutes = timeToMinutes(schedule.sleep_time);
+      if (sleepMinutes < 1320 && sleepMinutes > 60) { // Between 1 AM and 10 PM (converted to next day)
+        if (sleepMinutes < 120) { // Before 2 AM
+          optimizations.push("Very late bedtime - consider going to sleep by 10:00-11:00 PM");
+        }
+      } else if (sleepMinutes > 1380) { // After 11 PM
+        optimizations.push("Good bedtime range - maintain consistency for best results");
+      }
+    }
+
+    return optimizations;
+  }
+
+  // Extract and save schedule information from user message
+  private async extractAndSaveSchedule(userMessage: string): Promise<void> {
+    if (!this.context?.onScheduleUpdate) return;
+
+    try {
+      console.log('🔍 Extracting schedule info from message:', userMessage);
+      
+      // Extract all schedule times from the message
+      const extractedSchedules = ScheduleExtractor.extractAllScheduleTimes(userMessage);
+      
+      console.log('🔍 Schedule extraction results:', extractedSchedules);
+      
+      // Process each extracted schedule time
+      for (const scheduleInfo of extractedSchedules) {
+        if (scheduleInfo.confidence > ScheduleExtractor.getConfidenceThreshold()) {
+          const fieldMap = {
+            wake: 'wake_time',
+            breakfast: 'breakfast_time',
+            lunch: 'lunch_time',
+            dinner: 'dinner_time',
+            sleep: 'sleep_time'
+          };
+          
+          const fieldName = fieldMap[scheduleInfo.type];
+          if (fieldName) {
+            // Update only the specific field
+            await this.context.onScheduleUpdate({
+              field: fieldName,
+              value: scheduleInfo.time,
+              userId: this.context.profile?.user_id || '',
+              scheduleType: 'weekday'
+            });
+            console.log(`✅ Auto-saved schedule: ${scheduleInfo.type} at ${scheduleInfo.time} (confidence: ${scheduleInfo.confidence})`);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error extracting schedule information:', error);
+    }
   }
 
   // Extract and save profile information from user message
@@ -148,6 +315,7 @@ IMPORTANT GUIDELINES:
     }
   }
 
+
   async sendMessage(userMessage: string): Promise<string> {
     try {
       // Debug: Log API key status
@@ -159,6 +327,9 @@ IMPORTANT GUIDELINES:
 
       // Extract and save profile information from user message
       await this.extractAndSaveProfile(userMessage);
+      
+      // Extract and save schedule information from user message
+      await this.extractAndSaveSchedule(userMessage);
 
       // Add user message to conversation history
       this.conversationHistory.push({

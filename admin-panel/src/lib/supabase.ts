@@ -162,6 +162,44 @@ export type Database = {
           created_at?: string
         }
       }
+      user_habits: {
+        Row: {
+          id: string
+          user_id: string
+          habit: string
+          category: 'health' | 'productivity' | 'learning' | 'social' | 'entertainment'
+          confidence: number
+          frequency: string | null
+          source: string
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          habit: string
+          category: 'health' | 'productivity' | 'learning' | 'social' | 'entertainment'
+          confidence: number
+          frequency?: string | null
+          source: string
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          habit?: string
+          category?: 'health' | 'productivity' | 'learning' | 'social' | 'entertainment'
+          confidence?: number
+          frequency?: string | null
+          source?: string
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
   }
 }
