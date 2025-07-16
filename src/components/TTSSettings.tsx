@@ -126,7 +126,7 @@ export default function TTSSettingsModal({ visible, onClose }: TTSSettingsProps)
                   styles.providerButtonText,
                   settings.provider === 'system' && styles.providerButtonTextActive
                 ]}>
-                  📱 System TTS
+                  📱 Free TTS
                 </Text>
               </TouchableOpacity>
               
@@ -144,7 +144,7 @@ export default function TTSSettingsModal({ visible, onClose }: TTSSettingsProps)
                   settings.provider === 'elevenlabs' && styles.providerButtonTextActive,
                   !elevenLabsAvailable && styles.providerButtonTextDisabled
                 ]}>
-                  🎭 ElevenLabs {!elevenLabsAvailable && '(API Key Required)'}
+                  🎭 Pro TTS {!elevenLabsAvailable && '(API Key Required)'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -184,7 +184,7 @@ export default function TTSSettingsModal({ visible, onClose }: TTSSettingsProps)
             </View>
           </View>
 
-          {/* Voice Selection - Only show for System TTS */}
+          {/* Voice Selection - Only show for Free TTS */}
           {settings.provider === 'system' && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Voice</Text>
@@ -211,7 +211,7 @@ export default function TTSSettingsModal({ visible, onClose }: TTSSettingsProps)
             </View>
           )}
 
-          {/* Speech Rate - Only show for System TTS */}
+          {/* Speech Rate - Only show for Free TTS */}
           {settings.provider === 'system' && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Speech Rate: {settings.rate.toFixed(1)}x</Text>
@@ -233,7 +233,7 @@ export default function TTSSettingsModal({ visible, onClose }: TTSSettingsProps)
             </View>
           )}
 
-          {/* Speech Pitch - Only show for System TTS */}
+          {/* Speech Pitch - Only show for Free TTS */}
           {settings.provider === 'system' && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Speech Pitch: {settings.pitch.toFixed(1)}x</Text>
@@ -259,7 +259,7 @@ export default function TTSSettingsModal({ visible, onClose }: TTSSettingsProps)
           <View style={styles.buttonSection}>
             <TouchableOpacity style={styles.testButton} onPress={testVoice}>
               <Text style={styles.testButtonText}>
-                {settings.provider === 'elevenlabs' ? '🎭 Test ElevenLabs Voice' : '🎤 Test System Voice'}
+                {settings.provider === 'elevenlabs' ? '🎭 Test Pro Voice' : '🎤 Test Free Voice'}
               </Text>
             </TouchableOpacity>
             

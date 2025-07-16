@@ -9,6 +9,7 @@ interface VoiceAssistantOrbProps {
   isListening?: boolean;
   isProcessing?: boolean;
   isRecording?: boolean;
+  isSpeaking?: boolean;
   size?: number;
   onPress?: () => void;
   disabled?: boolean;
@@ -18,6 +19,7 @@ export default function VoiceAssistantOrb({
   isListening = false, 
   isProcessing = false,
   isRecording = false,
+  isSpeaking = false,
   size = 300,
   onPress,
   disabled = false
@@ -30,6 +32,7 @@ export default function VoiceAssistantOrb({
   const isListeningRef = useRef(isListening);
   const isProcessingRef = useRef(isProcessing);
   const isRecordingRef = useRef(isRecording);
+  const isSpeakingRef = useRef(isSpeaking);
 
   const onContextCreate = async (gl: any) => {
     // Initialize Three.js renderer
@@ -92,14 +95,15 @@ export default function VoiceAssistantOrb({
         const currentListening = isListeningRef.current;
         const currentProcessing = isProcessingRef.current;
         const currentRecording = isRecordingRef.current;
+        const currentSpeaking = isSpeakingRef.current;
         
         // Smooth rotation based on state (Z-axis only) - much slower
-        const rotationSpeed = currentRecording ? 0.005 : currentListening ? 0.003 : currentProcessing ? 0.004 : 0.001;
+        const rotationSpeed = currentRecording ? 0.005 : currentListening ? 0.003 : currentSpeaking ? 0.004 : currentProcessing ? 0.004 : 0.001;
         sphereRef.current.rotation.z -= rotationSpeed;
         
         // Scale animation based on state
         const baseScale = 1;
-        const pulseScale = currentRecording ? 0.08 : currentListening ? 0.03 : currentProcessing ? 0.05 : 0.05;
+        const pulseScale = currentRecording ? 0.08 : currentListening ? 0.03 : currentSpeaking ? 0.06 : currentProcessing ? 0.05 : 0.05;
         const pulse = Math.sin(Date.now() * 0.002) * pulseScale;
         sphereRef.current.scale.setScalar(baseScale + pulse);
       }
@@ -116,6 +120,7 @@ export default function VoiceAssistantOrb({
     isListeningRef.current = isListening;
     isProcessingRef.current = isProcessing;
     isRecordingRef.current = isRecording;
+    isSpeakingRef.current = isSpeaking;
     
     // Update color immediately when props change
     if (particleMaterialRef.current) {
@@ -123,11 +128,13 @@ export default function VoiceAssistantOrb({
         particleMaterialRef.current.color.setHex(0xff0066); // Red for recording
       } else if (isListening) {
         particleMaterialRef.current.color.setHex(0xff6600); // Orange for listening
+      } else if (isSpeaking) {
+        particleMaterialRef.current.color.setHex(0x00ff00); // Green for speaking
       } else {
         particleMaterialRef.current.color.setHex(0x00ccff); // Blue for idle/processing
       }
     }
-  }, [isListening, isProcessing, isRecording]);
+  }, [isListening, isProcessing, isRecording, isSpeaking]);
 
   useEffect(() => {
     return () => {
@@ -148,8 +155,8 @@ export default function VoiceAssistantOrb({
       disabled={disabled}
       activeOpacity={0.7}
       accessibilityRole="button"
-      accessibilityLabel={isRecording ? "Stop listening" : "Start listening"}
-      accessibilityHint="Tap to toggle voice recognition"
+      accessibilityLabel={isRecording ? "Stop listening" : isSpeaking ? "Claude is speaking" : "Start conversation"}
+      accessibilityHint="Tap to start conversation with Claude"
     >
       <GLView
         style={styles.glView}
