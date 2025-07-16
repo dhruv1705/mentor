@@ -8,12 +8,14 @@ interface ProfileCompletionProps {
   onFieldPress?: (field: string) => void;
   showProgress?: boolean;
   compact?: boolean;
+  collapsible?: boolean;
 }
 
 export const ProfileCompletion: React.FC<ProfileCompletionProps> = ({
   onFieldPress,
   showProgress = true,
   compact = false,
+  collapsible = false,
 }) => {
   const { profile, getProfileCompletion } = useAuth();
   
@@ -73,6 +75,48 @@ export const ProfileCompletion: React.FC<ProfileCompletionProps> = ({
           <Text style={styles.missingFieldsText}>
             Missing: {completion.missingFields.map(field => PROFILE_FIELD_LABELS[field as keyof typeof PROFILE_FIELD_LABELS]).join(', ')}
           </Text>
+        )}
+      </View>
+    );
+  }
+
+  if (collapsible) {
+    return (
+      <View style={styles.fieldsContainer}>
+        {Object.entries(PROFILE_FIELD_LABELS).map(([field, label]) => {
+          const isComplete = !completion.missingFields.includes(field);
+          const value = getFieldValue(field);
+          
+          return (
+            <TouchableOpacity
+              key={field}
+              style={styles.fieldItem}
+              onPress={() => onFieldPress?.(field)}
+              disabled={!onFieldPress}
+            >
+              <View style={styles.fieldHeader}>
+                {getFieldIcon(field, isComplete)}
+                <Text style={styles.fieldLabel}>{label}</Text>
+              </View>
+              {isComplete ? (
+                <Text style={styles.fieldValue}>{value}</Text>
+              ) : (
+                <Text style={styles.fieldMissing}>Not provided</Text>
+              )}
+              {onFieldPress && (
+                <Feather name="chevron-right" size={16} color="rgba(255, 255, 255, 0.5)" />
+              )}
+            </TouchableOpacity>
+          );
+        })}
+        
+        {completion.missingFields.length > 0 && (
+          <View style={styles.helpContainer}>
+            <Feather name="info" size={16} color="#00ccff" />
+            <Text style={styles.helpText}>
+              Chat with Claude to automatically fill in missing information!
+            </Text>
+          </View>
         )}
       </View>
     );

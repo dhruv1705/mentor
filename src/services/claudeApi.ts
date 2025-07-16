@@ -225,6 +225,16 @@ IMPORTANT GUIDELINES:
   getHistory(): ClaudeMessage[] {
     return [...this.conversationHistory];
   }
+
+  // Get the last user message from conversation history
+  getLastUserMessage(): string | null {
+    // Find the last user message in the conversation history
+    const lastUserMessage = [...this.conversationHistory]
+      .reverse()
+      .find(msg => msg.role === 'user');
+    
+    return lastUserMessage ? lastUserMessage.content : null;
+  }
 }
 
 // Export a singleton instance

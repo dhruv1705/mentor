@@ -15,10 +15,20 @@ interface ClaudeChatProps {
   speechCompleted?: boolean;
 }
 
+// Utility function to parse text into sentences
+const parseSentences = (text: string): string[] => {
+  // Split by sentence-ending punctuation followed by whitespace or end of string
+  const sentences = text.split(/(?<=[.!?])\s+/)
+    .filter(sentence => sentence.trim().length > 0)
+    .map(sentence => sentence.trim());
+  
+  return sentences;
+};
+
 export default function ClaudeChat({ initialText, isListening, onStartListening, onStopListening, onClearText, speechCompleted }: ClaudeChatProps) {
   const [inputText, setInputText] = useState(initialText);
   const [isLoading, setIsLoading] = useState(false);
-  const [conversation, setConversation] = useState<ClaudeMessage[]>([]);
+  const [currentSentence, setCurrentSentence] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [ttsStatus, setTtsStatus] = useState<TTSStatus>(ttsService.getStatus());
   const [profileUpdateNotification, setProfileUpdateNotification] = useState<string | null>(null);
@@ -64,6 +74,8 @@ export default function ClaudeChat({ initialText, isListening, onStartListening,
   useEffect(() => {
     const handleTtsStatusChange = (status: TTSStatus) => {
       setTtsStatus(status);
+      // Update current sentence display
+      setCurrentSentence(status.currentSentence);
     };
 
     const loadTtsInfo = async () => {
@@ -86,10 +98,10 @@ export default function ClaudeChat({ initialText, isListening, onStartListening,
     claudeApi.setContext({
       profile,
       profileCompletion,
-      conversationLength: conversation.length,
+      conversationLength: 0,
       onProfileUpdate: handleProfileUpdate,
     });
-  }, [profile, conversation.length]);
+  }, [profile]);
 
   // Handle profile updates from Claude conversations
   const handleProfileUpdate = async (field: string, value: any): Promise<void> => {
@@ -138,16 +150,8 @@ export default function ClaudeChat({ initialText, isListening, onStartListening,
       onClearText();
     }
 
-    // Add user message to local conversation display
-    const userMessage: ClaudeMessage = { role: 'user', content: messageToSend };
-    setConversation(prev => [...prev, userMessage]);
-
     try {
       const response = await claudeApi.sendMessage(messageToSend);
-      
-      // Add assistant response to local conversation display
-      const assistantMessage: ClaudeMessage = { role: 'assistant', content: response };
-      setConversation(prev => [...prev, assistantMessage]);
       
       // Auto-play TTS if enabled
       const settings = ttsService.getSettings();
@@ -168,9 +172,9 @@ export default function ClaudeChat({ initialText, isListening, onStartListening,
   };
 
   const clearConversation = () => {
-    setConversation([]);
     claudeApi.clearHistory();
     setError(null);
+    setCurrentSentence(null);
     // Stop any ongoing speech
     ttsService.stop().catch(console.error);
   };
@@ -236,21 +240,14 @@ export default function ClaudeChat({ initialText, isListening, onStartListening,
   };
 
   const retryLastMessage = async () => {
-    if (conversation.length === 0) return;
-    
-    // Find the last user message
-    const lastUserMessage = [...conversation].reverse().find(msg => msg.role === 'user');
-    if (!lastUserMessage) return;
+    const lastMessage = claudeApi.getLastUserMessage();
+    if (!lastMessage) return;
 
     setError(null);
     setIsLoading(true);
 
     try {
-      const response = await claudeApi.sendMessage(lastUserMessage.content);
-      
-      // Add assistant response to local conversation display
-      const assistantMessage: ClaudeMessage = { role: 'assistant', content: response };
-      setConversation(prev => [...prev, assistantMessage]);
+      const response = await claudeApi.sendMessage(lastMessage);
       
       // Auto-play TTS if enabled
       const settings = ttsService.getSettings();
@@ -273,35 +270,6 @@ export default function ClaudeChat({ initialText, isListening, onStartListening,
   return (
     <View style={styles.container}>
       
-      {/* TTS Provider Toggle */}
-      <View style={styles.ttsToggleContainer}>
-        <TouchableOpacity 
-          style={[
-            styles.ttsToggleButton,
-            !elevenLabsAvailable && styles.ttsToggleButtonDisabled
-          ]} 
-          onPress={toggleTtsProvider}
-          disabled={!elevenLabsAvailable && currentTtsProvider === 'system'}
-        >
-          <Text style={styles.ttsToggleLabel}>TTS:</Text>
-          <View style={styles.ttsToggleOptions}>
-            <Text style={[
-              styles.ttsToggleOption,
-              currentTtsProvider === 'system' && styles.ttsToggleOptionActive
-            ]}>
-              📱 System
-            </Text>
-            <Text style={styles.ttsToggleDivider}>|</Text>
-            <Text style={[
-              styles.ttsToggleOption,
-              currentTtsProvider === 'elevenlabs' && styles.ttsToggleOptionActive,
-              !elevenLabsAvailable && styles.ttsToggleOptionDisabled
-            ]}>
-              🎭 ElevenLabs
-            </Text>
-          </View>
-        </TouchableOpacity>
-      </View>
       
       {/* Profile Completion - Show when profile is incomplete */}
       <ProfileCompletion compact={true} />
@@ -325,52 +293,18 @@ export default function ClaudeChat({ initialText, isListening, onStartListening,
         </View>
       )}
 
-      <ScrollView style={styles.conversationContainer} showsVerticalScrollIndicator={false}>
-        {conversation.map((message, index) => (
-          <View
-            key={index}
-            style={[
-              styles.messageContainer,
-              message.role === 'user' ? styles.userMessage : styles.assistantMessage
-            ]}
-          >
-            <View style={styles.messageHeader}>
-              <Text style={styles.messageRole}>
-                {message.role === 'user' ? '👤 You' : '🤖 Claude'}
-              </Text>
-              {message.role === 'assistant' && (
-                <View style={styles.ttsControls}>
-                  <TouchableOpacity
-                    style={styles.ttsButton}
-                    onPress={() => handleSpeakMessage(message.content)}
-                    disabled={ttsStatus.isPlaying}
-                  >
-                    <Text style={styles.ttsButtonText}>
-                      {ttsStatus.isPlaying && ttsStatus.currentText === message.content ? '🔊' : '🔉'}
-                    </Text>
-                  </TouchableOpacity>
-                  {ttsStatus.isPlaying && ttsStatus.currentText === message.content && (
-                    <TouchableOpacity
-                      style={styles.ttsButton}
-                      onPress={handleStopSpeech}
-                    >
-                      <Text style={styles.ttsButtonText}>⏹️</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              )}
-            </View>
-            <Text style={styles.messageText}>{message.content}</Text>
-          </View>
-        ))}
-        
+      {/* Current Sentence Display */}
+      <View style={styles.sentenceContainer}>
+        {currentSentence && (
+          <Text style={styles.sentenceText}>"{currentSentence}"</Text>
+        )}
         {isLoading && (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="small" color="#007AFF" />
             <Text style={styles.loadingText}>Claude is thinking...</Text>
           </View>
         )}
-      </ScrollView>
+      </View>
 
       <View style={styles.inputContainer}>
         <View style={styles.inputRow}>
@@ -402,13 +336,41 @@ export default function ClaudeChat({ initialText, isListening, onStartListening,
             </TouchableOpacity>
           </View>
         </View>
-        {conversation.length > 0 && (
-          <View style={styles.buttonRow}>
-            <TouchableOpacity style={styles.clearButton} onPress={clearConversation}>
-              <Text style={styles.clearButtonText}>🗑️ Clear Chat</Text>
-            </TouchableOpacity>
+        <View style={styles.buttonRow}>
+          <TouchableOpacity style={styles.clearButton} onPress={clearConversation}>
+            <Text style={styles.clearButtonText}>🗑️ Clear History</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* TTS Provider Toggle - Moved below input area */}
+      <View style={styles.ttsToggleContainer}>
+        <TouchableOpacity 
+          style={[
+            styles.ttsToggleButton,
+            !elevenLabsAvailable && styles.ttsToggleButtonDisabled
+          ]} 
+          onPress={toggleTtsProvider}
+          disabled={!elevenLabsAvailable && currentTtsProvider === 'system'}
+        >
+          <Text style={styles.ttsToggleLabel}>TTS:</Text>
+          <View style={styles.ttsToggleOptions}>
+            <Text style={[
+              styles.ttsToggleOption,
+              currentTtsProvider === 'system' && styles.ttsToggleOptionActive
+            ]}>
+              📱 System
+            </Text>
+            <Text style={styles.ttsToggleDivider}>|</Text>
+            <Text style={[
+              styles.ttsToggleOption,
+              currentTtsProvider === 'elevenlabs' && styles.ttsToggleOptionActive,
+              !elevenLabsAvailable && styles.ttsToggleOptionDisabled
+            ]}>
+              🎭 ElevenLabs
+            </Text>
           </View>
-        )}
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -474,37 +436,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  conversationContainer: {
+  sentenceContainer: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 15,
-    maxHeight: 300,
+    minHeight: 100,
   },
-  messageContainer: {
-    marginBottom: 15,
-    padding: 12,
-    borderRadius: 12,
-    maxWidth: '85%',
-  },
-  userMessage: {
-    backgroundColor: '#00ccff',
-    alignSelf: 'flex-end',
-  },
-  assistantMessage: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  messageRole: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    marginBottom: 4,
-    color: 'rgba(255, 255, 255, 0.7)',
-  },
-  messageText: {
-    fontSize: 16,
-    lineHeight: 22,
+  sentenceText: {
+    fontSize: 18,
+    lineHeight: 28,
     color: '#FFFFFF',
+    textAlign: 'center',
+    paddingHorizontal: 20,
+    fontWeight: '500',
+    fontStyle: 'italic',
   },
   loadingContainer: {
     flexDirection: 'row',
@@ -604,29 +550,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#8E8E93',
     opacity: 0.6,
   },
-  messageHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  ttsControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  ttsButton: {
-    backgroundColor: '#00ccff',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-    marginLeft: 4,
-  },
-  ttsButtonText: {
-    color: 'white',
-    fontSize: 12,
-  },
   ttsToggleContainer: {
-    marginBottom: 15,
+    marginTop: 15,
     alignItems: 'center',
   },
   ttsToggleButton: {
