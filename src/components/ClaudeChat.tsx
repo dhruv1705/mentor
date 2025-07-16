@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { claudeApi, ClaudeMessage } from '../services/claudeApi';
 import { ttsService, TTSStatus, TTSProvider, TTSSettings } from '../services/ttsService';
@@ -13,6 +13,11 @@ interface ClaudeChatProps {
   onStopListening?: () => void;
   onClearText?: () => void;
   speechCompleted?: boolean;
+  onSpeakingChange?: (isSpeaking: boolean) => void;
+}
+
+interface ClaudeChatHandle {
+  handleOrbTap: () => void;
 }
 
 // Utility function to parse text into sentences
@@ -25,7 +30,7 @@ const parseSentences = (text: string): string[] => {
   return sentences;
 };
 
-export default function ClaudeChat({ initialText, isListening, onStartListening, onStopListening, onClearText, speechCompleted }: ClaudeChatProps) {
+const ClaudeChat = forwardRef<ClaudeChatHandle, ClaudeChatProps>(({ initialText, isListening, onStartListening, onStopListening, onClearText, speechCompleted, onSpeakingChange }, ref) => {
   const [inputText, setInputText] = useState(initialText);
   const [isLoading, setIsLoading] = useState(false);
   const [currentSentence, setCurrentSentence] = useState<string | null>(null);
@@ -37,8 +42,159 @@ export default function ClaudeChat({ initialText, isListening, onStartListening,
   const [autoSendTimeoutId, setAutoSendTimeoutId] = useState<NodeJS.Timeout | null>(null);
   const [currentTtsProvider, setCurrentTtsProvider] = useState<TTSProvider>('system');
   const [elevenLabsAvailable, setElevenLabsAvailable] = useState(false);
+  const [orbState, setOrbState] = useState<'idle' | 'speaking' | 'listening'>('idle');
 
   const { profile, updateProfileField, getProfileCompletion, refreshProfile } = useAuth();
+
+  // Generate context-aware questions based on user profile and conversation history
+  const generateContextualQuestion = (): string => {
+    const completion = getProfileCompletion();
+    
+    // First time user welcome
+    if (completion.completionPercentage === 0) {
+      return "Welcome to mentor! Tell me about yourself to get started.";
+    }
+    
+    // Profile completion questions
+    if (completion.missingFields.length > 0) {
+      const missingField = completion.missingFields[0];
+      switch (missingField) {
+        case 'name':
+          return "What's your name?";
+        case 'age':
+          return "How old are you?";
+        case 'occupation':
+          return "What do you do for work?";
+        case 'interests':
+          return "What are your main interests or hobbies?";
+        case 'goals':
+          return "What are your current goals or aspirations?";
+        case 'location':
+          return "Where are you located?";
+        case 'education':
+          return "What's your educational background?";
+        case 'experience':
+          return "Tell me about your professional experience.";
+        default:
+          return "Tell me more about yourself.";
+      }
+    }
+    
+    // General conversation starters when profile is complete
+    const conversationStarters = [
+      "How are you feeling today?",
+      "What's on your mind?",
+      "What would you like to talk about?",
+      "How can I help you today?",
+      "What's been happening in your life lately?",
+    ];
+    
+    return conversationStarters[Math.floor(Math.random() * conversationStarters.length)];
+  };
+
+  // Handle orb tap with simplified state transitions
+  const handleOrbTap = async () => {
+    if (isLoading) return;
+    
+    setError(null);
+    
+    try {
+      switch (orbState) {
+        case 'idle':
+          // Blue → Green: Generate question and start speaking
+          await handleIdleToSpeaking();
+          break;
+          
+        case 'speaking':
+          // Green → Red: Stop speaking and start listening
+          await handleSpeakingToListening();
+          break;
+          
+        case 'listening':
+          // Red → Blue: Stop listening and go idle
+          await handleListeningToIdle();
+          break;
+      }
+    } catch (error) {
+      console.error('Orb tap error:', error);
+      setError('Something went wrong. Please try again.');
+      // Fall back to idle state on error
+      await handleErrorFallback();
+    }
+  };
+
+  // Blue → Green: Generate question and start speaking
+  const handleIdleToSpeaking = async () => {
+    setIsLoading(true);
+    setOrbState('speaking');
+    
+    if (onSpeakingChange) {
+      onSpeakingChange(true);
+    }
+    
+    try {
+      const question = generateContextualQuestion();
+      const response = await claudeApi.sendMessage(question);
+      
+      // Start TTS
+      const settings = ttsService.getSettings();
+      if (settings.autoPlay && response.trim()) {
+        await ttsService.speak(response);
+      }
+    } catch (error) {
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Green → Red: Stop speaking and start listening
+  const handleSpeakingToListening = async () => {
+    setOrbState('listening');
+    
+    // Stop TTS immediately
+    await ttsService.stop();
+    
+    if (onSpeakingChange) {
+      onSpeakingChange(false);
+    }
+    
+    // Start speech recognition
+    if (onStartListening) {
+      onStartListening();
+    }
+  };
+
+  // Red → Blue: Stop listening and go idle
+  const handleListeningToIdle = async () => {
+    setOrbState('idle');
+    
+    // Stop speech recognition
+    if (onStopListening) {
+      onStopListening();
+    }
+  };
+
+  // Error fallback: Go to idle state
+  const handleErrorFallback = async () => {
+    setOrbState('idle');
+    
+    // Stop everything
+    await ttsService.stop();
+    
+    if (onSpeakingChange) {
+      onSpeakingChange(false);
+    }
+    
+    if (onStopListening) {
+      onStopListening();
+    }
+  };
+
+  // Expose methods to parent component
+  useImperativeHandle(ref, () => ({
+    handleOrbTap,
+  }));
 
   // Update inputText when initialText prop changes (real-time speech updates)
   useEffect(() => {
@@ -76,6 +232,20 @@ export default function ClaudeChat({ initialText, isListening, onStartListening,
       setTtsStatus(status);
       // Update current sentence display
       setCurrentSentence(status.currentSentence);
+      
+      // Update speaking state based on TTS status
+      if (status.isPlaying && status.currentText !== null) {
+        // TTS is playing - ensure orb state is speaking
+        setOrbState('speaking');
+        if (onSpeakingChange) {
+          onSpeakingChange(true);
+        }
+      } else if (!status.isPlaying && status.currentText === null && orbState === 'speaking') {
+        // TTS has completed naturally - stay in speaking state until user taps
+        if (onSpeakingChange) {
+          onSpeakingChange(false);
+        }
+      }
     };
 
     const loadTtsInfo = async () => {
@@ -153,6 +323,13 @@ export default function ClaudeChat({ initialText, isListening, onStartListening,
     try {
       const response = await claudeApi.sendMessage(messageToSend);
       
+      // Automatically transition to speaking state (Red → Green)
+      setOrbState('speaking');
+      
+      if (onSpeakingChange) {
+        onSpeakingChange(true);
+      }
+      
       // Auto-play TTS if enabled
       const settings = ttsService.getSettings();
       if (settings.autoPlay && response.trim()) {
@@ -166,6 +343,8 @@ export default function ClaudeChat({ initialText, isListening, onStartListening,
     } catch (error) {
       setError('Failed to send message. Please try again.');
       console.error('Chat error:', error);
+      // Fall back to idle state on error
+      await handleErrorFallback();
     } finally {
       setIsLoading(false);
     }
@@ -175,8 +354,17 @@ export default function ClaudeChat({ initialText, isListening, onStartListening,
     claudeApi.clearHistory();
     setError(null);
     setCurrentSentence(null);
+    
+    // Reset orb state to idle
+    setOrbState('idle');
+    
     // Stop any ongoing speech
     ttsService.stop().catch(console.error);
+    
+    // Reset speaking state
+    if (onSpeakingChange) {
+      onSpeakingChange(false);
+    }
   };
 
   const handleSpeakMessage = async (text: string) => {
@@ -205,8 +393,8 @@ export default function ClaudeChat({ initialText, isListening, onStartListening,
     const newProvider: TTSProvider = currentTtsProvider === 'system' ? 'elevenlabs' : 'system';
     if (newProvider === 'elevenlabs' && !elevenLabsAvailable) {
       Alert.alert(
-        'ElevenLabs Unavailable',
-        'ElevenLabs API key is not configured. Please add your API key to use ElevenLabs TTS.',
+        'Pro TTS Unavailable',
+        'Pro TTS API key is not configured. Please add your API key to use Pro TTS.',
         [{ text: 'OK', style: 'default' }]
       );
       return;
@@ -216,7 +404,7 @@ export default function ClaudeChat({ initialText, isListening, onStartListening,
     setCurrentTtsProvider(newProvider);
     
     // Show feedback
-    const providerName = newProvider === 'elevenlabs' ? 'ElevenLabs' : 'System TTS';
+    const providerName = newProvider === 'elevenlabs' ? 'Pro TTS' : 'Free TTS';
     Alert.alert(
       'TTS Provider Changed',
       `Switched to ${providerName}`,
@@ -337,44 +525,42 @@ export default function ClaudeChat({ initialText, isListening, onStartListening,
           </View>
         </View>
         <View style={styles.buttonRow}>
+          <TouchableOpacity 
+            style={[
+              styles.ttsToggleButton,
+              !elevenLabsAvailable && styles.ttsToggleButtonDisabled
+            ]} 
+            onPress={toggleTtsProvider}
+            disabled={!elevenLabsAvailable && currentTtsProvider === 'system'}
+          >
+            <View style={styles.ttsToggleOptions}>
+              <Text style={[
+                styles.ttsToggleOption,
+                currentTtsProvider === 'system' && styles.ttsToggleOptionActive
+              ]}>
+                Free
+              </Text>
+              <Text style={styles.ttsToggleDivider}>|</Text>
+              <Text style={[
+                styles.ttsToggleOption,
+                currentTtsProvider === 'elevenlabs' && styles.ttsToggleOptionActive,
+                !elevenLabsAvailable && styles.ttsToggleOptionDisabled
+              ]}>
+                Pro
+              </Text>
+            </View>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.clearButton} onPress={clearConversation}>
-            <Text style={styles.clearButtonText}>🗑️ Clear History</Text>
+            <Text style={styles.clearButtonText}>Clear History</Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* TTS Provider Toggle - Moved below input area */}
-      <View style={styles.ttsToggleContainer}>
-        <TouchableOpacity 
-          style={[
-            styles.ttsToggleButton,
-            !elevenLabsAvailable && styles.ttsToggleButtonDisabled
-          ]} 
-          onPress={toggleTtsProvider}
-          disabled={!elevenLabsAvailable && currentTtsProvider === 'system'}
-        >
-          <Text style={styles.ttsToggleLabel}>TTS:</Text>
-          <View style={styles.ttsToggleOptions}>
-            <Text style={[
-              styles.ttsToggleOption,
-              currentTtsProvider === 'system' && styles.ttsToggleOptionActive
-            ]}>
-              📱 System
-            </Text>
-            <Text style={styles.ttsToggleDivider}>|</Text>
-            <Text style={[
-              styles.ttsToggleOption,
-              currentTtsProvider === 'elevenlabs' && styles.ttsToggleOptionActive,
-              !elevenLabsAvailable && styles.ttsToggleOptionDisabled
-            ]}>
-              🎭 ElevenLabs
-            </Text>
-          </View>
-        </TouchableOpacity>
-      </View>
     </View>
   );
-}
+});
+
+export default ClaudeChat;
 
 const styles = StyleSheet.create({
   container: {
@@ -535,16 +721,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.3)',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingHorizontal: 15,
+    paddingVertical: 8,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
   clearButtonText: {
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: 'rgba(255, 255, 255, 0.6)',
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   disabledButton: {
     backgroundColor: '#8E8E93',

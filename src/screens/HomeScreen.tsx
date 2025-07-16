@@ -7,8 +7,10 @@ import ProfileIcon from '../components/ProfileIcon';
 export default function HomeScreen() {
   const [speechText, setSpeechText] = useState('');
   const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const [speechCompleted, setSpeechCompleted] = useState(false);
   const speechRecognitionRef = useRef<any>(null);
+  const claudeChatRef = useRef<any>(null);
 
   const handleSpeechTextChange = (newText: string) => {
     setSpeechText(newText);
@@ -39,6 +41,12 @@ export default function HomeScreen() {
     }
   };
 
+  const handleOrbTap = () => {
+    if (claudeChatRef.current) {
+      claudeChatRef.current.handleOrbTap();
+    }
+  };
+
   return (
     <KeyboardAvoidingView 
       style={styles.container} 
@@ -54,6 +62,8 @@ export default function HomeScreen() {
           onListeningChange={setIsListening}
           onSpeechComplete={handleSpeechComplete}
           ref={speechRecognitionRef}
+          isSpeaking={isSpeaking}
+          onOrbTap={handleOrbTap}
         />
         
         <ClaudeChat 
@@ -63,6 +73,8 @@ export default function HomeScreen() {
           onStopListening={handleStopListening}
           onClearText={handleClearText}
           speechCompleted={speechCompleted}
+          onSpeakingChange={setIsSpeaking}
+          ref={claudeChatRef}
         />
       </ScrollView>
     </KeyboardAvoidingView>

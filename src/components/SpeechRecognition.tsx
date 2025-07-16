@@ -9,6 +9,8 @@ interface SpeechRecognitionProps {
   text: string;
   onListeningChange?: (isListening: boolean) => void;
   onSpeechComplete?: () => void;
+  isSpeaking?: boolean;
+  onOrbTap?: () => void;
 }
 
 interface SpeechRecognitionHandle {
@@ -17,7 +19,7 @@ interface SpeechRecognitionHandle {
   clearText: () => void;
 }
 
-const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionProps>(({ onTextChange, text, onListeningChange, onSpeechComplete }, ref) => {
+const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionProps>(({ onTextChange, text, onListeningChange, onSpeechComplete, isSpeaking = false, onOrbTap }, ref) => {
   const [permissionStatus, setPermissionStatus] = useState('unknown');
   const [isAvailable, setIsAvailable] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -395,17 +397,16 @@ const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionP
   };
 
   const handleOrbPress = async () => {
-    // Stop TTS if it's currently playing
-    try {
-      await ttsService.stop();
-    } catch (error) {
-      console.error('Error stopping TTS:', error);
-    }
-    
-    if (isListening) {
-      stopListening();
+    if (onOrbTap) {
+      // Use the simplified orb tap handler from ClaudeChat
+      onOrbTap();
     } else {
-      startListening();
+      // Fallback behavior if no custom handler
+      if (isListening) {
+        stopListening();
+      } else {
+        startListening();
+      }
     }
   };
 
@@ -460,6 +461,7 @@ const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionP
           isRecording={isListening}
           isListening={false}
           isProcessing={false}
+          isSpeaking={isSpeaking}
           size={280}
           onPress={handleOrbPress}
           disabled={permissionStatus !== 'granted' || !isAvailable}
