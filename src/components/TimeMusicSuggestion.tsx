@@ -4,6 +4,9 @@ import { Feather } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import { TimeMusicService, TimeMusicSuggestion as TimeMusicSuggestionType } from '../services/timeMusicService';
 import { ttsService } from '../services/ttsService';
+import { MUSIC_TRACKS } from '../data/musicData';
+import { AudioUtils } from '../utils/audioUtils';
+import { settingsService } from '../services/settingsService';
 
 interface TimeMusicSuggestionProps {
   onMusicPlay?: (track: any) => void;
@@ -16,15 +19,61 @@ export const TimeMusicSuggestion: React.FC<TimeMusicSuggestionProps> = ({ onMusi
   const [isLoading, setIsLoading] = useState(false);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [playbackStatus, setPlaybackStatus] = useState<any>(null);
+  const [originalVolume, setOriginalVolume] = useState(1.0);
+  const [autoPlayEnabled, setAutoPlayEnabled] = useState(true);
 
   useEffect(() => {
     loadTimeMusicSuggestion();
+    
+    // Load auto-play setting
+    const settings = settingsService.getSettings();
+    setAutoPlayEnabled(settings.musicAutoPlay);
+    
     return () => {
       if (sound) {
         sound.unloadAsync();
       }
     };
   }, []);
+
+  // Listen for settings changes
+  useEffect(() => {
+    const handleSettingsChange = (settings: any) => {
+      setAutoPlayEnabled(settings.musicAutoPlay);
+    };
+    
+    settingsService.addListener(handleSettingsChange);
+    return () => settingsService.removeListener(handleSettingsChange);
+  }, []);
+
+  // Auto-play music after loading suggestion
+  useEffect(() => {
+    if (!loading && autoPlayEnabled && suggestion) {
+      const timer = setTimeout(() => {
+        handleAutoPlay();
+      }, 2500); // 2.5 second delay
+      
+      return () => clearTimeout(timer);
+    }
+  }, [loading, suggestion, autoPlayEnabled]);
+
+  // Listen for TTS status changes for volume ducking
+  useEffect(() => {
+    const handleTtsStatusChange = (status: any) => {
+      if (sound && isPlaying) {
+        if (status.isPlaying) {
+          // Duck volume when TTS starts
+          duckVolume();
+        } else {
+          // Restore volume when TTS stops
+          restoreVolume();
+        }
+      }
+    };
+
+    ttsService.addStatusListener(handleTtsStatusChange);
+    return () => ttsService.removeStatusListener(handleTtsStatusChange);
+  }, [sound, isPlaying]);
 
   const loadTimeMusicSuggestion = async () => {
     try {
@@ -46,9 +95,36 @@ export const TimeMusicSuggestion: React.FC<TimeMusicSuggestionProps> = ({ onMusi
     }
   };
 
+  const getFallbackTrack = () => {
+    return MUSIC_TRACKS.find(track => track.genre === 'Ambient');
+  };
+
+  const handleAutoPlay = async () => {
+    if (!autoPlayEnabled) return;
+    
+    try {
+      let trackToPlay;
+      
+      if (suggestion?.recommendedTrack) {
+        trackToPlay = { uri: suggestion.recommendedTrack.url };
+      } else {
+        // Use fallback ambient track from musicData
+        const fallbackTrack = getFallbackTrack();
+        trackToPlay = { uri: fallbackTrack?.url || '' };
+      }
+
+      await playTrack(trackToPlay);
+    } catch (error) {
+      console.error('Error in auto-play:', error);
+    }
+  };
+
   const handlePlaySuggestion = async () => {
     if (!suggestion?.recommendedTrack) return;
+    await playTrack({ uri: suggestion.recommendedTrack.url });
+  };
 
+  const playTrack = async (trackSource: any) => {
     try {
       setIsLoading(true);
 
@@ -58,11 +134,11 @@ export const TimeMusicSuggestion: React.FC<TimeMusicSuggestionProps> = ({ onMusi
         setSound(null);
       }
 
-      // Stop TTS if it's playing
-      const ttsStatus = ttsService.getStatus();
-      if (ttsStatus.isPlaying) {
-        await ttsService.stop();
-      }
+      // Don't stop TTS anymore - let volume ducking handle it
+      // const ttsStatus = ttsService.getStatus();
+      // if (ttsStatus.isPlaying) {
+      //   await ttsService.stop();
+      // }
 
       // Configure audio session
       await Audio.setAudioModeAsync({
@@ -73,15 +149,24 @@ export const TimeMusicSuggestion: React.FC<TimeMusicSuggestionProps> = ({ onMusi
         playThroughEarpieceAndroid: false,
       });
 
-      // Load and play the track
+      // Load and play the track with fade-in
       const { sound: newSound } = await Audio.Sound.createAsync(
-        { uri: suggestion.recommendedTrack.url },
-        { shouldPlay: true },
+        trackSource,
+        { shouldPlay: true, volume: 0 }, // Start at 0 volume for fade-in
         onPlaybackStatusUpdate
       );
 
       setSound(newSound);
       setIsPlaying(true);
+
+      // Check if TTS is currently playing and duck volume, otherwise fade in normally
+      const ttsStatus = ttsService.getStatus();
+      if (ttsStatus.isPlaying) {
+        await AudioUtils.fadeIn(newSound, originalVolume * 0.25, { duration: 500 });
+      } else {
+        await AudioUtils.fadeIn(newSound, originalVolume, { duration: 500 });
+      }
+
     } catch (error) {
       console.error('Error playing track:', error);
       Alert.alert('Error', 'Failed to play music track');
@@ -117,6 +202,28 @@ export const TimeMusicSuggestion: React.FC<TimeMusicSuggestionProps> = ({ onMusi
       setPlaybackStatus(null);
     } catch (error) {
       console.error('Error stopping track:', error);
+    }
+  };
+
+  const duckVolume = async () => {
+    if (!sound) return;
+    
+    try {
+      // Smooth volume transition to 25%
+      await AudioUtils.duckVolume(sound, originalVolume, { duration: 200 });
+    } catch (error) {
+      console.error('Error ducking volume:', error);
+    }
+  };
+
+  const restoreVolume = async () => {
+    if (!sound) return;
+    
+    try {
+      // Smooth volume transition back to original
+      await AudioUtils.restoreVolume(sound, originalVolume, { duration: 200 });
+    } catch (error) {
+      console.error('Error restoring volume:', error);
     }
   };
 

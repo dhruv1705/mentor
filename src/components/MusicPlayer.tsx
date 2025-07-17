@@ -4,6 +4,7 @@ import { Feather } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import { MusicTrack, MusicPlayerState } from '../types/music';
 import { ttsService } from '../services/ttsService';
+import { AudioUtils } from '../utils/audioUtils';
 
 interface MusicPlayerProps {
   track: MusicTrack;
@@ -23,6 +24,7 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
   const [playbackDuration, setPlaybackDuration] = useState(0);
   const [volume, setVolume] = useState(1.0);
   const [isMuted, setIsMuted] = useState(false);
+  const [originalVolume, setOriginalVolume] = useState(1.0);
 
   useEffect(() => {
     loadTrack();
@@ -33,6 +35,24 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
       }
     };
   }, [track.id]);
+
+  // Listen for TTS status changes for volume ducking
+  useEffect(() => {
+    const handleTtsStatusChange = (status: any) => {
+      if (sound && isPlaying) {
+        if (status.isPlaying) {
+          // Duck volume when TTS starts
+          duckVolume();
+        } else {
+          // Restore volume when TTS stops
+          restoreVolume();
+        }
+      }
+    };
+
+    ttsService.addStatusListener(handleTtsStatusChange);
+    return () => ttsService.removeStatusListener(handleTtsStatusChange);
+  }, [sound, isPlaying]);
 
   useEffect(() => {
     // Notify parent component of state changes
@@ -60,11 +80,11 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
         await sound.unloadAsync();
       }
 
-      // Check if TTS is playing and stop it
-      const ttsStatus = ttsService.getStatus();
-      if (ttsStatus.isPlaying) {
-        await ttsService.stop();
-      }
+      // Don't stop TTS - let volume ducking handle it
+      // const ttsStatus = ttsService.getStatus();
+      // if (ttsStatus.isPlaying) {
+      //   await ttsService.stop();
+      // }
 
       // Configure audio session for music playback
       await Audio.setAudioModeAsync({
@@ -87,6 +107,12 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
       );
 
       setSound(newSound);
+      
+      // Check if TTS is currently playing and duck volume immediately
+      const ttsStatus = ttsService.getStatus();
+      if (ttsStatus.isPlaying && isPlaying) {
+        await newSound.setVolumeAsync(volume * 0.25);
+      }
     } catch (error) {
       console.error('Error loading track:', error);
       Alert.alert('Error', 'Failed to load music track');
@@ -118,14 +144,20 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
         await sound.pauseAsync();
         setIsPlaying(false);
       } else {
-        // Stop TTS if it's playing
-        const ttsStatus = ttsService.getStatus();
-        if (ttsStatus.isPlaying) {
-          await ttsService.stop();
-        }
+        // Don't stop TTS - let volume ducking handle it
+        // const ttsStatus = ttsService.getStatus();
+        // if (ttsStatus.isPlaying) {
+        //   await ttsService.stop();
+        // }
         
         await sound.playAsync();
         setIsPlaying(true);
+        
+        // Check if TTS is currently playing and duck volume immediately
+        const ttsStatus = ttsService.getStatus();
+        if (ttsStatus.isPlaying) {
+          await sound.setVolumeAsync(originalVolume * 0.25);
+        }
       }
     } catch (error) {
       console.error('Error playing/pausing track:', error);
@@ -176,8 +208,31 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
       const clampedVolume = Math.max(0, Math.min(1, newVolume));
       await sound.setVolumeAsync(clampedVolume);
       setVolume(clampedVolume);
+      setOriginalVolume(clampedVolume); // Update original volume when user changes it
     } catch (error) {
       console.error('Error changing volume:', error);
+    }
+  };
+
+  const duckVolume = async () => {
+    if (!sound) return;
+    
+    try {
+      // Duck volume to 25% of original with smooth transition
+      await AudioUtils.duckVolume(sound, originalVolume, { duration: 200 });
+    } catch (error) {
+      console.error('Error ducking volume:', error);
+    }
+  };
+
+  const restoreVolume = async () => {
+    if (!sound) return;
+    
+    try {
+      // Restore to original volume with smooth transition
+      await AudioUtils.restoreVolume(sound, originalVolume, { duration: 200 });
+    } catch (error) {
+      console.error('Error restoring volume:', error);
     }
   };
 
