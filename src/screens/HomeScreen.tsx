@@ -1,8 +1,9 @@
 import React, { useState, useRef } from 'react';
-import { StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { StyleSheet, ScrollView, KeyboardAvoidingView, Platform, View } from 'react-native';
 import SpeechRecognition from '../components/SpeechRecognition';
 import ClaudeChat from '../components/ClaudeChat';
 import ProfileIcon from '../components/ProfileIcon';
+import TimeMusicSuggestion from '../components/TimeMusicSuggestion';
 
 export default function HomeScreen() {
   const [speechText, setSpeechText] = useState('');
@@ -66,6 +67,10 @@ export default function HomeScreen() {
           onOrbTap={handleOrbTap}
         />
         
+        <View style={{ width: '100%' }}>
+          <TimeMusicSuggestion />
+        </View>
+        
         <ClaudeChat 
           initialText={speechText}
           isListening={isListening}
@@ -94,5 +99,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingBottom: 40,
     flexGrow: 1,
+    width: '100%',
   },
 });
