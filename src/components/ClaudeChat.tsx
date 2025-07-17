@@ -4,6 +4,7 @@ import { claudeApi, ClaudeMessage } from '../services/claudeApi';
 import { ttsService, TTSStatus, TTSProvider, TTSSettings } from '../services/ttsService';
 import { useAuth } from '../contexts/AuthContext';
 import { ProfileCompletion } from './ProfileCompletion';
+import { ScheduleVisualization } from './ScheduleVisualization';
 import { Feather } from '@expo/vector-icons';
 
 interface ClaudeChatProps {
@@ -44,7 +45,7 @@ const ClaudeChat = forwardRef<ClaudeChatHandle, ClaudeChatProps>(({ initialText,
   const [elevenLabsAvailable, setElevenLabsAvailable] = useState(false);
   const [orbState, setOrbState] = useState<'idle' | 'speaking' | 'listening'>('idle');
 
-  const { profile, updateProfileField, getProfileCompletion, refreshProfile } = useAuth();
+  const { profile, schedule, updateProfileField, getProfileCompletion, refreshProfile, updateSchedule, updateScheduleField, refreshSchedule } = useAuth();
 
   // Generate context-aware questions based on user profile and conversation history
   const generateContextualQuestion = (): string => {
@@ -268,10 +269,12 @@ const ClaudeChat = forwardRef<ClaudeChatHandle, ClaudeChatProps>(({ initialText,
     claudeApi.setContext({
       profile,
       profileCompletion,
+      schedule,
       conversationLength: 0,
       onProfileUpdate: handleProfileUpdate,
+      onScheduleUpdate: handleScheduleUpdate,
     });
-  }, [profile]);
+  }, [profile, schedule]);
 
   // Handle profile updates from Claude conversations
   const handleProfileUpdate = async (field: string, value: any): Promise<void> => {
@@ -295,10 +298,38 @@ const ClaudeChat = forwardRef<ClaudeChatHandle, ClaudeChatProps>(({ initialText,
     }
   };
 
-  // Clear profile update notification
+  // Handle schedule updates from Claude conversations
+  const handleScheduleUpdate = async (scheduleData: any): Promise<void> => {
+    try {
+      if (scheduleData.field && scheduleData.value) {
+        // Field-specific update (new format)
+        const success = await updateScheduleField(
+          scheduleData.field,
+          scheduleData.value,
+          scheduleData.scheduleType || 'weekday'
+        );
+        if (success) {
+          console.log('✅ Schedule field updated successfully:', scheduleData);
+          await refreshSchedule();
+        }
+      } else {
+        // Full schedule update (old format)
+        const success = await updateSchedule(scheduleData);
+        if (success) {
+          console.log('✅ Schedule updated successfully:', scheduleData);
+          await refreshSchedule();
+        }
+      }
+    } catch (error) {
+      console.error('Error updating schedule:', error);
+    }
+  };
+
+  // Clear notifications
   const dismissNotification = () => {
     setProfileUpdateNotification(null);
   };
+
 
   const sendMessage = async () => {
     if (!inputText.trim() || isLoading) return;
@@ -462,6 +493,9 @@ const ClaudeChat = forwardRef<ClaudeChatHandle, ClaudeChatProps>(({ initialText,
       {/* Profile Completion - Show when profile is incomplete */}
       <ProfileCompletion compact={true} />
 
+      {/* Schedule Visualization - Show current schedule */}
+      <ScheduleVisualization schedule={schedule.weekday} compact={true} />
+
       {/* Profile Update Notification */}
       {profileUpdateNotification && (
         <View style={styles.notificationContainer}>
@@ -471,6 +505,7 @@ const ClaudeChat = forwardRef<ClaudeChatHandle, ClaudeChatProps>(({ initialText,
           </TouchableOpacity>
         </View>
       )}
+
       
       {error && (
         <View style={styles.errorContainer}>
@@ -606,6 +641,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  habitNotificationContainer: {
+    backgroundColor: 'rgba(76, 175, 80, 0.15)',
+    borderColor: '#4CAF50',
   },
   notificationText: {
     color: '#00ccff',
