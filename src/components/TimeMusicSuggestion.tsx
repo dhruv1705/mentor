@@ -3,7 +3,6 @@ import { StyleSheet, View, Text, TouchableOpacity, Alert } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import { TimeMusicService, TimeMusicSuggestion as TimeMusicSuggestionType } from '../services/timeMusicService';
-import { useNavigation } from '@react-navigation/native';
 import { ttsService } from '../services/ttsService';
 
 interface TimeMusicSuggestionProps {
@@ -17,7 +16,6 @@ export const TimeMusicSuggestion: React.FC<TimeMusicSuggestionProps> = ({ onMusi
   const [isLoading, setIsLoading] = useState(false);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [playbackStatus, setPlaybackStatus] = useState<any>(null);
-  const navigation = useNavigation();
 
   useEffect(() => {
     loadTimeMusicSuggestion();
@@ -122,24 +120,13 @@ export const TimeMusicSuggestion: React.FC<TimeMusicSuggestionProps> = ({ onMusi
     }
   };
 
-  const handleViewAllMusic = () => {
-    navigation.navigate('Music' as never);
-  };
 
-  const formatTime = (milliseconds: number): string => {
-    const totalSeconds = Math.floor(milliseconds / 1000);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-  };
 
   if (loading) {
     return (
-      <View style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <Feather name="music" size={24} color="#00ccff" />
-          <Text style={styles.loadingText}>Loading music suggestion...</Text>
-        </View>
+      <View style={styles.loadingContainer}>
+        <Feather name="music" size={24} color="#00ccff" />
+        <Text style={styles.loadingText}>Loading music suggestion...</Text>
       </View>
     );
   }
@@ -149,167 +136,34 @@ export const TimeMusicSuggestion: React.FC<TimeMusicSuggestionProps> = ({ onMusi
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Feather name="music" size={20} color="#00ccff" />
-        <Text style={styles.headerText}>Music for You</Text>
-      </View>
-      
-      <View style={styles.suggestionCard}>
-        <View style={styles.timeInfo}>
-          <Text style={styles.timeText}>{suggestion.description}</Text>
-          <Text style={styles.categoryText}>
-            {suggestion.category === 'morning' ? '🌅 Morning Energy' : '🌙 Evening Relaxation'}
-          </Text>
-        </View>
-        
-        <View style={styles.trackInfo}>
-          <Text style={styles.trackTitle} numberOfLines={1}>
-            {suggestion.recommendedTrack.title}
-          </Text>
-          <Text style={styles.trackArtist} numberOfLines={1}>
-            by {suggestion.recommendedTrack.artist}
-          </Text>
-        </View>
-        
-        {/* Progress Bar */}
-        {playbackStatus && (
-          <View style={styles.progressContainer}>
-            <View style={styles.progressBar}>
-              <View 
-                style={[
-                  styles.progressFill,
-                  {
-                    width: playbackStatus.durationMillis 
-                      ? `${(playbackStatus.positionMillis / playbackStatus.durationMillis) * 100}%`
-                      : '0%'
-                  }
-                ]}
-              />
-            </View>
-            <View style={styles.progressTime}>
-              <Text style={styles.timeText}>
-                {formatTime(playbackStatus.positionMillis || 0)}
-              </Text>
-              <Text style={styles.timeText}>
-                {formatTime(playbackStatus.durationMillis || 0)}
-              </Text>
-            </View>
-          </View>
-        )}
-        
-        <View style={styles.actions}>
-          {sound && isPlaying ? (
-            <View style={styles.playingControls}>
-              <TouchableOpacity
-                style={styles.controlButton}
-                onPress={handlePauseResume}
-                activeOpacity={0.7}
-              >
-                <Feather name="pause" size={18} color="#00ccff" />
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={styles.controlButton}
-                onPress={handleStop}
-                activeOpacity={0.7}
-              >
-                <Feather name="square" size={18} color="#ff4757" />
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={styles.viewAllButton}
-                onPress={handleViewAllMusic}
-                activeOpacity={0.7}
-              >
-                <Feather name="list" size={16} color="#00ccff" />
-                <Text style={styles.viewAllButtonText}>View All</Text>
-              </TouchableOpacity>
-            </View>
-          ) : sound && !isPlaying ? (
-            <View style={styles.playingControls}>
-              <TouchableOpacity
-                style={styles.controlButton}
-                onPress={handlePauseResume}
-                activeOpacity={0.7}
-              >
-                <Feather name="play" size={18} color="#00ccff" />
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={styles.controlButton}
-                onPress={handleStop}
-                activeOpacity={0.7}
-              >
-                <Feather name="square" size={18} color="#ff4757" />
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={styles.viewAllButton}
-                onPress={handleViewAllMusic}
-                activeOpacity={0.7}
-              >
-                <Feather name="list" size={16} color="#00ccff" />
-                <Text style={styles.viewAllButtonText}>View All</Text>
-              </TouchableOpacity>
-            </View>
+    <View style={styles.actions}>
+      {sound ? (
+        <TouchableOpacity
+          style={styles.playButton}
+          onPress={handlePauseResume}
+          activeOpacity={0.7}
+        >
+          <Feather name="music" size={20} color={isPlaying ? "#00ccff" : "#888888"} />
+        </TouchableOpacity>
+      ) : (
+        <TouchableOpacity
+          style={[styles.playButton, isLoading && styles.playButtonDisabled]}
+          onPress={handlePlaySuggestion}
+          activeOpacity={0.7}
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <Feather name="loader" size={20} color="#ffffff" />
           ) : (
-            <>
-              <TouchableOpacity
-                style={[styles.playButton, isLoading && styles.playButtonDisabled]}
-                onPress={handlePlaySuggestion}
-                activeOpacity={0.7}
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <Feather name="loader" size={18} color="#ffffff" />
-                ) : (
-                  <Feather name="play" size={18} color="#ffffff" />
-                )}
-                <Text style={styles.playButtonText}>
-                  {isLoading ? 'Loading...' : 'Play Now'}
-                </Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={styles.viewAllButton}
-                onPress={handleViewAllMusic}
-                activeOpacity={0.7}
-              >
-                <Feather name="list" size={16} color="#00ccff" />
-                <Text style={styles.viewAllButtonText}>View All</Text>
-              </TouchableOpacity>
-            </>
+            <Feather name="music" size={20} color="#00ccff" />
           )}
-        </View>
-      </View>
+        </TouchableOpacity>
+      )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    backgroundColor: 'rgba(0, 204, 255, 0.05)',
-    borderRadius: 12,
-    padding: 16,
-    marginVertical: 8,
-    marginHorizontal: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 204, 255, 0.2)',
-    width: '100%',
-    alignSelf: 'stretch',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  headerText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#ffffff',
-    marginLeft: 8,
-  },
   loadingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -321,116 +175,17 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.7)',
     marginLeft: 8,
   },
-  suggestionCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    borderRadius: 8,
-    padding: 16,
-    width: '100%',
-  },
-  timeInfo: {
-    marginBottom: 12,
-  },
-  timeText: {
-    fontSize: 14,
-    color: '#ffffff',
-    marginBottom: 4,
-  },
-  categoryText: {
-    fontSize: 12,
-    color: '#00ccff',
-    fontWeight: '600',
-  },
-  trackInfo: {
-    marginBottom: 12,
-  },
-  trackTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#ffffff',
-    marginBottom: 2,
-  },
-  trackArtist: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.7)',
-  },
   actions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    width: '100%',
-    gap: 12,
+    justifyContent: 'center',
   },
   playButton: {
-    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#00ccff',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-    flex: 1,
     justifyContent: 'center',
-    minHeight: 44,
-  },
-  playButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#ffffff',
-    marginLeft: 6,
-  },
-  viewAllButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 204, 255, 0.3)',
-    minHeight: 44,
-    justifyContent: 'center',
-  },
-  viewAllButtonText: {
-    fontSize: 12,
-    color: '#00ccff',
-    marginLeft: 4,
-  },
-  progressContainer: {
-    marginBottom: 12,
-  },
-  progressBar: {
-    height: 3,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#00ccff',
-    borderRadius: 2,
-  },
-  progressTime: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 6,
-  },
-  timeText: {
-    fontSize: 10,
-    color: 'rgba(255, 255, 255, 0.6)',
-  },
-  playingControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    width: '100%',
-    justifyContent: 'space-between',
-  },
-  controlButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 22,
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderRadius: 25,
+    width: 50,
+    height: 50,
     borderWidth: 1,
     borderColor: 'rgba(0, 204, 255, 0.3)',
   },

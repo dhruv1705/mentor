@@ -10,7 +10,7 @@ import { GENDER_OPTIONS, ProfileUpdateData } from '../types/profile';
 
 export default function ProfileScreen() {
   const [settings, setSettings] = useState(ttsService.getSettings());
-  const { user, profile, schedule, signOut, updateProfileField } = useAuth();
+  const { user, profile, signOut, updateProfileField } = useAuth();
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
@@ -163,35 +163,6 @@ export default function ProfileScreen() {
           <ProfileCompletion onFieldPress={handleFieldEdit} collapsible={true} />
         </CollapsibleSection>
 
-        {/* Schedule Section */}
-        <CollapsibleSection title="Your Schedule" defaultExpanded={true} icon="⏰">
-          <View style={styles.scheduleContainer}>
-            <Text style={styles.scheduleTitle}>Daily Schedule</Text>
-            <View style={styles.scheduleGrid}>
-              <View style={styles.scheduleItem}>
-                <Text style={styles.scheduleLabel}>🌅 Wake Up</Text>
-                <Text style={styles.scheduleTime}>{schedule.weekday?.wake_time || 'Not set'}</Text>
-              </View>
-              <View style={styles.scheduleItem}>
-                <Text style={styles.scheduleLabel}>🍳 Breakfast</Text>
-                <Text style={styles.scheduleTime}>{schedule.weekday?.breakfast_time || 'Not set'}</Text>
-              </View>
-              <View style={styles.scheduleItem}>
-                <Text style={styles.scheduleLabel}>🍽️ Lunch</Text>
-                <Text style={styles.scheduleTime}>{schedule.weekday?.lunch_time || 'Not set'}</Text>
-              </View>
-              <View style={styles.scheduleItem}>
-                <Text style={styles.scheduleLabel}>🍽️ Dinner</Text>
-                <Text style={styles.scheduleTime}>{schedule.weekday?.dinner_time || 'Not set'}</Text>
-              </View>
-              <View style={styles.scheduleItem}>
-                <Text style={styles.scheduleLabel}>😴 Sleep</Text>
-                <Text style={styles.scheduleTime}>{schedule.weekday?.sleep_time || 'Not set'}</Text>
-              </View>
-            </View>
-            <Text style={styles.scheduleNote}>💬 Talk to your mentor to optimize your schedule!</Text>
-          </View>
-        </CollapsibleSection>
 
         {/* TTS Settings Section */}
         <CollapsibleSection title="Text-to-Speech Settings" defaultExpanded={true} icon="🔊">
@@ -503,45 +474,5 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
-  },
-  scheduleContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 12,
-    padding: 16,
-  },
-  scheduleTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  scheduleGrid: {
-    gap: 12,
-  },
-  scheduleItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    padding: 12,
-    borderRadius: 8,
-  },
-  scheduleLabel: {
-    fontSize: 16,
-    color: '#FFFFFF',
-    flex: 1,
-  },
-  scheduleTime: {
-    fontSize: 16,
-    color: '#00ccff',
-    fontWeight: '600',
-  },
-  scheduleNote: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.7)',
-    textAlign: 'center',
-    marginTop: 16,
-    fontStyle: 'italic',
   },
 });

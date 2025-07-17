@@ -100,6 +100,16 @@ export default function ProfileIcon() {
                 
                 <TouchableOpacity 
                   style={styles.menuItem}
+                  onPress={() => navigateToScreen('Schedule')}
+                >
+                  <View style={styles.menuItemIconContainer}>
+                    <Feather name="calendar" size={18} color="#00ccff" />
+                  </View>
+                  <Text style={styles.menuItemText}>Schedule</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.menuItem}
                   onPress={() => navigateToScreen('Profile')}
                 >
                   <View style={styles.menuItemIconContainer}>
@@ -128,6 +138,16 @@ export default function ProfileIcon() {
                     <Feather name="music" size={18} color="#00ccff" />
                   </View>
                   <Text style={styles.menuItemText}>Music</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.menuItem}
+                  onPress={() => navigateToScreen('Schedule')}
+                >
+                  <View style={styles.menuItemIconContainer}>
+                    <Feather name="calendar" size={18} color="#00ccff" />
+                  </View>
+                  <Text style={styles.menuItemText}>Schedule</Text>
                 </TouchableOpacity>
                 
                 <TouchableOpacity 

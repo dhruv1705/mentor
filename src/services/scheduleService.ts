@@ -75,13 +75,31 @@ export class ScheduleService {
     scheduleType: 'weekday' | 'weekend' = 'weekday'
   ): Promise<boolean> {
     try {
-      const { error } = await supabase
-        .from('user_schedules')
-        .update({ [timeSlot]: time })
-        .eq('user_id', userId)
-        .eq('schedule_type', scheduleType);
+      // Check if schedule exists first
+      const existingSchedule = await this.getUserSchedule(userId, scheduleType);
+      
+      if (existingSchedule) {
+        // Update existing record
+        const { error } = await supabase
+          .from('user_schedules')
+          .update({ [timeSlot]: time })
+          .eq('user_id', userId)
+          .eq('schedule_type', scheduleType);
 
-      if (error) throw error;
+        if (error) throw error;
+      } else {
+        // Create new record with the time slot
+        const { error } = await supabase
+          .from('user_schedules')
+          .insert({
+            user_id: userId,
+            schedule_type: scheduleType,
+            [timeSlot]: time
+          });
+
+        if (error) throw error;
+      }
+      
       return true;
     } catch (error) {
       console.error('Error updating time slot:', error);
