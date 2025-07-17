@@ -21,6 +21,15 @@ export const MUSIC_TRACKS: Omit<MusicTrack, 'id' | 'created_at' | 'updated_at'>[
     genre: 'Sleep',
     album: 'Sleep Collection',
   },
+  {
+    title: 'Ambient Unspoken',
+    artist: 'The Ambientalist',
+    duration: 480000, // 8 minutes estimated
+    url: 'https://storage.googleapis.com/lifesparkbucket/lifeguide/ambient/ytdl.canehill.info%20-%20The%20Ambientalist%20-%20Unspoken%20(320%20KBps).mp3',
+    thumbnail: 'https://storage.googleapis.com/lifesparkbucket/lifeguide/ambient/ambient-thumbnail.jpg',
+    genre: 'Ambient',
+    album: 'Ambient Collection',
+  },
 ];
 
 // Configuration for Google Cloud Storage
