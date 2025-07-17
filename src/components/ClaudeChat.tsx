@@ -4,7 +4,6 @@ import { claudeApi, ClaudeMessage } from '../services/claudeApi';
 import { ttsService, TTSStatus, TTSProvider, TTSSettings } from '../services/ttsService';
 import { useAuth } from '../contexts/AuthContext';
 import { ProfileCompletion } from './ProfileCompletion';
-import { ScheduleVisualization } from './ScheduleVisualization';
 import { Feather } from '@expo/vector-icons';
 
 interface ClaudeChatProps {
@@ -15,6 +14,7 @@ interface ClaudeChatProps {
   onClearText?: () => void;
   speechCompleted?: boolean;
   onSpeakingChange?: (isSpeaking: boolean) => void;
+  speechCountdown?: number;
 }
 
 interface ClaudeChatHandle {
@@ -31,7 +31,17 @@ const parseSentences = (text: string): string[] => {
   return sentences;
 };
 
-const ClaudeChat = forwardRef<ClaudeChatHandle, ClaudeChatProps>(({ initialText, isListening, onStartListening, onStopListening, onClearText, speechCompleted, onSpeakingChange }, ref) => {
+const ClaudeChat = forwardRef<ClaudeChatHandle, ClaudeChatProps>((props, ref) => {
+  const {
+    initialText,
+    isListening,
+    onStartListening,
+    onStopListening,
+    onClearText,
+    speechCompleted,
+    onSpeakingChange,
+    speechCountdown = 0
+  } = props;
   const [inputText, setInputText] = useState(initialText);
   const [isLoading, setIsLoading] = useState(false);
   const [currentSentence, setCurrentSentence] = useState<string | null>(null);
@@ -44,6 +54,7 @@ const ClaudeChat = forwardRef<ClaudeChatHandle, ClaudeChatProps>(({ initialText,
   const [currentTtsProvider, setCurrentTtsProvider] = useState<TTSProvider>('system');
   const [elevenLabsAvailable, setElevenLabsAvailable] = useState(false);
   const [orbState, setOrbState] = useState<'idle' | 'speaking' | 'listening'>('idle');
+  const [isFirstInteraction, setIsFirstInteraction] = useState(true);
 
   const { profile, schedule, updateProfileField, getProfileCompletion, refreshProfile, updateSchedule, updateScheduleField, refreshSchedule } = useAuth();
 
@@ -134,13 +145,22 @@ const ClaudeChat = forwardRef<ClaudeChatHandle, ClaudeChatProps>(({ initialText,
     }
     
     try {
-      const question = generateContextualQuestion();
-      const response = await claudeApi.sendMessage(question);
+      let responseText: string;
+      
+      if (isFirstInteraction) {
+        // Show welcome message on first interaction
+        responseText = "Welcome to Mentor app. I will try and understand what your current daily schedule is so we can improve it and make it better";
+        setIsFirstInteraction(false);
+      } else {
+        // Generate contextual question for subsequent interactions
+        const question = generateContextualQuestion();
+        responseText = await claudeApi.sendMessage(question);
+      }
       
       // Start TTS
       const settings = ttsService.getSettings();
-      if (settings.autoPlay && response.trim()) {
-        await ttsService.speak(response);
+      if (settings.autoPlay && responseText.trim()) {
+        await ttsService.speak(responseText);
       }
     } catch (error) {
       throw error;
@@ -493,9 +513,6 @@ const ClaudeChat = forwardRef<ClaudeChatHandle, ClaudeChatProps>(({ initialText,
       {/* Profile Completion - Show when profile is incomplete */}
       <ProfileCompletion compact={true} />
 
-      {/* Schedule Visualization - Show current schedule */}
-      <ScheduleVisualization schedule={schedule.weekday} compact={true} />
-
       {/* Profile Update Notification */}
       {profileUpdateNotification && (
         <View style={styles.notificationContainer}>
@@ -530,9 +547,14 @@ const ClaudeChat = forwardRef<ClaudeChatHandle, ClaudeChatProps>(({ initialText,
       </View>
 
       <View style={styles.inputContainer}>
+        {isListening && speechCountdown && speechCountdown > 0 ? (
+          <View style={styles.countdownContainer}>
+            <Text style={styles.countdownText}>Auto-stop in {speechCountdown}s</Text>
+          </View>
+        ) : null}
         <View style={styles.inputRow}>
           <TextInput
-            style={styles.textInput}
+            style={[styles.textInput, isListening && styles.textInputRecording]}
             value={inputText}
             onChangeText={setInputText}
             placeholder="Type your message..."
@@ -750,6 +772,19 @@ const styles = StyleSheet.create({
   micButtonText: {
     fontSize: 20,
     color: '#00ccff',
+  },
+  countdownContainer: {
+    alignItems: 'center',
+    paddingBottom: 8,
+  },
+  countdownText: {
+    fontSize: 12,
+    color: '#FF9500',
+    fontWeight: 'bold',
+  },
+  textInputRecording: {
+    borderColor: '#FF9500',
+    borderWidth: 2,
   },
   buttonRow: {
     flexDirection: 'row',

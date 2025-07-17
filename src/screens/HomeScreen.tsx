@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { StyleSheet, ScrollView, KeyboardAvoidingView, Platform, View } from 'react-native';
+import { StyleSheet, ScrollView, KeyboardAvoidingView, Platform, View, Text } from 'react-native';
 import SpeechRecognition from '../components/SpeechRecognition';
 import ClaudeChat from '../components/ClaudeChat';
 import ProfileIcon from '../components/ProfileIcon';
@@ -10,6 +10,7 @@ export default function HomeScreen() {
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [speechCompleted, setSpeechCompleted] = useState(false);
+  const [speechCountdown, setSpeechCountdown] = useState(0);
   const speechRecognitionRef = useRef<any>(null);
   const claudeChatRef = useRef<any>(null);
 
@@ -20,6 +21,10 @@ export default function HomeScreen() {
 
   const handleSpeechComplete = () => {
     setSpeechCompleted(true);
+  };
+
+  const handleCountdownChange = (countdown: number) => {
+    setSpeechCountdown(countdown);
   };
 
   const handleStartListening = () => {
@@ -56,6 +61,10 @@ export default function HomeScreen() {
     >
       <ProfileIcon />
       
+      <View style={styles.musicButtonContainer}>
+        <TimeMusicSuggestion />
+      </View>
+      
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.contentContainer}>
         <SpeechRecognition 
           onTextChange={handleSpeechTextChange} 
@@ -65,11 +74,19 @@ export default function HomeScreen() {
           ref={speechRecognitionRef}
           isSpeaking={isSpeaking}
           onOrbTap={handleOrbTap}
+          onCountdownChange={handleCountdownChange}
         />
         
-        <View style={{ width: '100%' }}>
-          <TimeMusicSuggestion />
-        </View>
+        {/* Show getting started message based on orb state */}
+        {!speechText && (
+          <View style={styles.gettingStartedContainer}>
+            {isSpeaking ? (
+              <Text style={styles.gettingStartedText}>Tap the green orb to say something</Text>
+            ) : !isListening ? (
+              <Text style={styles.gettingStartedText}>Tap the Blue Orb To get started</Text>
+            ) : null}
+          </View>
+        )}
         
         <ClaudeChat 
           initialText={speechText}
@@ -80,6 +97,7 @@ export default function HomeScreen() {
           speechCompleted={speechCompleted}
           onSpeakingChange={setIsSpeaking}
           ref={claudeChatRef}
+          speechCountdown={speechCountdown}
         />
       </ScrollView>
     </KeyboardAvoidingView>
@@ -100,5 +118,26 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     flexGrow: 1,
     width: '100%',
+  },
+  musicButtonContainer: {
+    position: 'absolute',
+    top: 110,
+    right: 20,
+    zIndex: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gettingStartedContainer: {
+    marginTop: 30,
+    marginBottom: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gettingStartedText: {
+    fontSize: 16,
+    color: '#888888',
+    textAlign: 'center',
+    fontWeight: '500',
+    opacity: 0.8,
   },
 });
