@@ -2,8 +2,8 @@ import 'dotenv/config';
 
 export default {
   expo: {
-    name: 'simple-text-app',
-    slug: 'simple-text-app',
+    name: 'mentor',
+    slug: 'mentor',
     version: '1.0.0',
     orientation: 'portrait',
     icon: './assets/icon.png',

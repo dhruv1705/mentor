@@ -11,6 +11,7 @@ interface SpeechRecognitionProps {
   onSpeechComplete?: () => void;
   isSpeaking?: boolean;
   onOrbTap?: () => void;
+  onCountdownChange?: (countdown: number) => void;
 }
 
 interface SpeechRecognitionHandle {
@@ -19,7 +20,7 @@ interface SpeechRecognitionHandle {
   clearText: () => void;
 }
 
-const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionProps>(({ onTextChange, text, onListeningChange, onSpeechComplete, isSpeaking = false, onOrbTap }, ref) => {
+const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionProps>(({ onTextChange, text, onListeningChange, onSpeechComplete, isSpeaking = false, onOrbTap, onCountdownChange }, ref) => {
   const [permissionStatus, setPermissionStatus] = useState('unknown');
   const [isAvailable, setIsAvailable] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -35,6 +36,7 @@ const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionP
   const accumulatedFinalTextRef = useRef('');
   const lastResultIndexRef = useRef(0);
   const isProcessingRef = useRef(false);
+  const baseTextRef = useRef(''); // Store the original text before speech started
 
   useEffect(() => {
     checkAvailability();
@@ -56,19 +58,24 @@ const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionP
       const currentInterim = interimTextRef.current.trim();
       const currentAccumulated = accumulatedFinalTextRef.current.trim();
       
-      if (currentInterim) {
-        // Combine accumulated final text with new interim text
-        const newFinalText = currentAccumulated + 
-          (currentAccumulated ? ' ' : '') + 
-          currentInterim;
+      if (currentInterim || currentAccumulated) {
+        // Add any remaining interim text to accumulated final text
+        if (currentInterim) {
+          accumulatedFinalTextRef.current = currentAccumulated + 
+            (currentAccumulated ? ' ' : '') + 
+            currentInterim;
+        }
         
-        // Update the main text input
-        const existingText = text.trim();
-        const completeText = existingText + 
-          (existingText ? ' ' : '') + 
-          newFinalText;
+        // Build final text from base + accumulated final
+        const baseText = baseTextRef.current.trim();
+        const finalText = accumulatedFinalTextRef.current.trim();
         
-        onTextChange(completeText);
+        let completeText = baseText;
+        if (finalText) {
+          completeText += (baseText ? ' ' : '') + finalText;
+        }
+        
+        onTextChange(completeText || '');
         
         // Reset accumulated text and interim text
         accumulatedFinalTextRef.current = '';
@@ -79,6 +86,9 @@ const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionP
         if (onSpeechComplete) {
           onSpeechComplete();
         }
+      } else if (onSpeechComplete) {
+        // Even if no new text, notify that speech is complete
+        onSpeechComplete();
       }
     } finally {
       isProcessingRef.current = false;
@@ -91,6 +101,7 @@ const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionP
     accumulatedFinalTextRef.current = '';
     lastResultIndexRef.current = 0;
     isProcessingRef.current = false;
+    baseTextRef.current = text; // Store the current text as base
     setTranscript('');
   };
 
@@ -110,6 +121,13 @@ const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionP
     }
     return () => clearInterval(interval);
   }, [countdown]);
+
+  // Notify parent component when countdown changes
+  useEffect(() => {
+    if (onCountdownChange) {
+      onCountdownChange(countdown);
+    }
+  }, [countdown, onCountdownChange]);
 
   useSpeechRecognitionEvent('start', () => {
     console.log('Speech recognition started');
@@ -163,14 +181,35 @@ const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionP
         console.log('Accumulated final text:', accumulatedFinalTextRef.current);
       }
       
-      // Handle interim results by updating the ref and display
+      // Handle interim results by immediately updating the main TextInput
       if (newInterimText.trim()) {
         interimTextRef.current = newInterimText.trim();
-        setTranscript(newInterimText.trim());
+        
+        // Build text from base + accumulated final + interim
+        const baseText = baseTextRef.current.trim();
+        const finalText = accumulatedFinalTextRef.current.trim();
+        
+        let combinedText = baseText;
+        if (finalText) {
+          combinedText += (baseText ? ' ' : '') + finalText;
+        }
+        combinedText += (combinedText ? ' ' : '') + newInterimText.trim();
+        
+        onTextChange(combinedText || '');
       } else if (newFinalText.trim()) {
         // Clear interim display when we get final results
         interimTextRef.current = '';
-        setTranscript('');
+        
+        // Update the main TextInput with base + accumulated final text only
+        const baseText = baseTextRef.current.trim();
+        const finalText = accumulatedFinalTextRef.current.trim();
+        
+        let combinedText = baseText;
+        if (finalText) {
+          combinedText += (baseText ? ' ' : '') + finalText;
+        }
+        
+        onTextChange(combinedText || '');
       }
       
       // Reset auto-stop timeout when we get results
@@ -469,25 +508,6 @@ const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionP
       </View>
       
       
-      {transcript && (
-        <View style={styles.buttonRow}>
-          <TouchableOpacity style={styles.finishButton} onPress={finishSpeaking}>
-            <Text style={styles.finishButtonText}>✓ Finish</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-      
-      {transcript && (
-        <View style={styles.interimContainer}>
-          <View style={styles.interimHeader}>
-            <Text style={styles.interimLabel}>🎤 Listening...</Text>
-            {countdown > 0 && (
-              <Text style={styles.countdown}>Auto-stop in {countdown}s</Text>
-            )}
-          </View>
-          <Text style={styles.interimText}>{transcript}</Text>
-        </View>
-      )}
     </View>
   );
 });
