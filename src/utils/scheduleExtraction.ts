@@ -116,19 +116,30 @@ export class ScheduleExtractor {
     const expressions: Array<{ time: string; period?: string; confidence: number; explicit: boolean }> = [];
 
     // 12-hour format with AM/PM (highest confidence)
-    const amPmRegex = /\b(\d{1,2}):?(\d{2})?\s*(AM|PM)\b/gi;
+    const amPmRegex = /(\d{1,2}):?(\d{2})?\s*(AM|PM|A\.M\.|P\.M\.)/gi;
     let match;
     while ((match = amPmRegex.exec(text)) !== null) {
       const hours = match[1];
       const minutes = match[2] || '00';
-      const period = match[3].toUpperCase();
+      const rawPeriod = match[3];
       
-      expressions.push({
-        time: `${hours}:${minutes}`,
-        period,
-        confidence: 0.9,
-        explicit: true,
-      });
+      if (rawPeriod) {
+        // Normalize period (handle A.M./P.M. format)
+        const period = rawPeriod.toUpperCase().replace(/\./g, '').replace(/M$/, 'M');
+        
+        expressions.push({
+          time: `${hours}:${minutes}`,
+          period,
+          confidence: 0.9,
+          explicit: true,
+        });
+      } else {
+        expressions.push({
+          time: `${hours}:${minutes}`,
+          confidence: 0.8,
+          explicit: true,
+        });
+      }
     }
 
     // 24-hour format (high confidence)
@@ -147,11 +158,14 @@ export class ScheduleExtractor {
     }
 
     // Word numbers with AM/PM (medium confidence)
-    const wordTimeRegex = /\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(AM|PM)\b/gi;
+    const wordTimeRegex = /\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(AM|PM|A\.M\.|P\.M\.)\b/gi;
     while ((match = wordTimeRegex.exec(text)) !== null) {
       const wordNum = match[1].toLowerCase();
-      const period = match[2].toUpperCase();
+      const rawPeriod = match[2].toUpperCase();
       const numHours = this.wordToNumber[wordNum];
+      
+      // Normalize period (handle A.M./P.M. format)
+      const period = rawPeriod.replace(/\./g, '').replace(/M$/, 'M');
       
       if (numHours) {
         expressions.push({
@@ -164,11 +178,14 @@ export class ScheduleExtractor {
     }
 
     // Approximate times (lower confidence)
-    const approxRegex = /\b(around|about|approximately)\s+(\d{1,2}):?(\d{2})?\s*(AM|PM)?\b/gi;
+    const approxRegex = /\b(around|about|approximately)\s+(\d{1,2}):?(\d{2})?\s*(AM|PM|A\.M\.|P\.M\.)?\b/gi;
     while ((match = approxRegex.exec(text)) !== null) {
       const hours = match[2];
       const minutes = match[3] || '00';
-      const period = match[4]?.toUpperCase();
+      const rawPeriod = match[4]?.toUpperCase();
+      
+      // Normalize period (handle A.M./P.M. format)
+      const period = rawPeriod ? rawPeriod.replace(/\./g, '').replace(/M$/, 'M') : undefined;
       
       expressions.push({
         time: `${hours}:${minutes}`,

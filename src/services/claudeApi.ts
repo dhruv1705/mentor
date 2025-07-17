@@ -211,12 +211,8 @@ IMPORTANT GUIDELINES:
     if (!this.context?.onScheduleUpdate) return;
 
     try {
-      console.log('🔍 Extracting schedule info from message:', userMessage);
-      
       // Extract all schedule times from the message
       const extractedSchedules = ScheduleExtractor.extractAllScheduleTimes(userMessage);
-      
-      console.log('🔍 Schedule extraction results:', extractedSchedules);
       
       // Process each extracted schedule time
       for (const scheduleInfo of extractedSchedules) {
