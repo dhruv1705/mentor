@@ -54,54 +54,69 @@ const ClaudeChat = forwardRef<ClaudeChatHandle, ClaudeChatProps>((props, ref) =>
   const [currentTtsProvider, setCurrentTtsProvider] = useState<TTSProvider>('system');
   const [elevenLabsAvailable, setElevenLabsAvailable] = useState(false);
   const [orbState, setOrbState] = useState<'idle' | 'speaking' | 'listening'>('idle');
-  const [isFirstInteraction, setIsFirstInteraction] = useState(true);
 
   const { profile, schedule, updateProfileField, getProfileCompletion, refreshProfile, updateSchedule, updateScheduleField, refreshSchedule } = useAuth();
 
-  // Generate context-aware questions based on user profile and conversation history
-  const generateContextualQuestion = (): string => {
-    const completion = getProfileCompletion();
+  // Get current question number based on collected data
+  const getCurrentQuestionNumber = (): number => {
+    let questionNumber = 1;
     
-    // First time user welcome
-    if (completion.completionPercentage === 0) {
-      return "Welcome to mentor! Tell me about yourself to get started.";
+    // Check if profile question (1) is completed - any profile field means we can move to question 2
+    const hasAnyProfileInfo = (profile?.name && profile.name !== 'Voice Assistant User') || 
+                              profile?.age || 
+                              profile?.gender || 
+                              (profile?.height && profile.height > 0);
+    
+    if (hasAnyProfileInfo) questionNumber = Math.max(questionNumber, 2);
+    
+    // Check sleep schedule question (2) - both sleep_time AND wake_time needed
+    const hasSleepSchedule = schedule?.weekday?.sleep_time && schedule?.weekday?.wake_time;
+    if (hasSleepSchedule) questionNumber = Math.max(questionNumber, 3);
+    
+    // Check meal schedule question (3) - all three meal times needed
+    const hasMealSchedule = schedule?.weekday?.breakfast_time && schedule?.weekday?.lunch_time && schedule?.weekday?.dinner_time;
+    if (hasMealSchedule) questionNumber = Math.max(questionNumber, 4);
+    
+    // Check target sleep schedule question (4) - both target sleep and wake times needed
+    const hasTargetSleepSchedule = schedule?.weekday?.target_sleep_time && schedule?.weekday?.target_wake_time;
+    if (hasTargetSleepSchedule) questionNumber = Math.max(questionNumber, 5);
+    
+    // Check target meal schedule question (5) - all three target meal times needed
+    const hasTargetMealSchedule = schedule?.weekday?.target_breakfast_time && schedule?.weekday?.target_lunch_time && schedule?.weekday?.target_dinner_time;
+    if (hasTargetMealSchedule) questionNumber = Math.max(questionNumber, 6);
+    
+    return questionNumber;
+  };
+
+  // Generate structured question based on current progress
+  const generateStructuredQuestion = (): string => {
+    const questionNumber = getCurrentQuestionNumber();
+    
+    if (questionNumber > 5) {
+      return "Thank you! Data collection complete.";
     }
     
-    // Profile completion questions
-    if (completion.missingFields.length > 0) {
-      const missingField = completion.missingFields[0];
-      switch (missingField) {
-        case 'name':
-          return "What's your name?";
-        case 'age':
-          return "How old are you?";
-        case 'occupation':
-          return "What do you do for work?";
-        case 'interests':
-          return "What are your main interests or hobbies?";
-        case 'goals':
-          return "What are your current goals or aspirations?";
-        case 'location':
-          return "Where are you located?";
-        case 'education':
-          return "What's your educational background?";
-        case 'experience':
-          return "Tell me about your professional experience.";
-        default:
-          return "Tell me more about yourself.";
-      }
+    return `Question ${questionNumber} of 5`;
+  };
+
+  // Get the appropriate question text based on current progress
+  const getQuestionText = (): string => {
+    const questionNumber = getCurrentQuestionNumber();
+    
+    switch (questionNumber) {
+      case 1:
+        return "Question 1 of 5: Welcome to Mentor app, To start off with, Please tell me your name, age, gender and height. You can answer whatever you are comfortable answering";
+      case 2:
+        return "Question 2 of 5: Tell me about your sleep schedule, What time do you go to bed and what time do you usually wake up?";
+      case 3:
+        return "Question 3 of 5: Now tell me about your meals, What time do you have breakfast lunch and dinner?";
+      case 4:
+        return "Question 4 of 5: Now that we know your current daily schedule, Let us understand your Targeted schedule. Why don't you tell me what time would you like to go to sleep and what time would you like to wake up?";
+      case 5:
+        return "Question 5 of 5: Now tell me what time you would like to have your breakfast lunch and dinner.";
+      default:
+        return "Thank you! Data collection complete.";
     }
-    
-    // General conversation starters when profile is complete
-    const conversationStarters = [
-      "How are you feeling today?",
-      "What's on your mind?",
-      "What would you like to talk about?",
-      "How can I help you today?",
-      "What's been happening in your life lately?",
-    ];
-    
-    return conversationStarters[Math.floor(Math.random() * conversationStarters.length)];
   };
 
   // Handle orb tap with simplified state transitions
@@ -147,14 +162,14 @@ const ClaudeChat = forwardRef<ClaudeChatHandle, ClaudeChatProps>((props, ref) =>
     try {
       let responseText: string;
       
-      if (isFirstInteraction) {
-        // Show welcome message on first interaction
-        responseText = "Welcome to Mentor app. I will try and understand what your current daily schedule is so we can improve it and make it better";
-        setIsFirstInteraction(false);
+      // Always use data-driven question determination
+      const currentQuestion = getCurrentQuestionNumber();
+      
+      if (currentQuestion > 5) {
+        responseText = "Thank you! Data collection complete.";
       } else {
-        // Generate contextual question for subsequent interactions
-        const question = generateContextualQuestion();
-        responseText = await claudeApi.sendMessage(question);
+        // Get the appropriate question based on current progress
+        responseText = getQuestionText();
       }
       
       // Start TTS
@@ -533,6 +548,11 @@ const ClaudeChat = forwardRef<ClaudeChatHandle, ClaudeChatProps>((props, ref) =>
         </View>
       )}
 
+      {/* Progress Indicator */}
+      <View style={styles.progressContainer}>
+        <Text style={styles.progressText}>Question {getCurrentQuestionNumber()} of 5</Text>
+      </View>
+
       {/* Current Sentence Display */}
       <View style={styles.sentenceContainer}>
         {currentSentence && (
@@ -853,5 +873,15 @@ const styles = StyleSheet.create({
   ttsToggleDivider: {
     color: 'rgba(255, 255, 255, 0.4)',
     fontSize: 14,
+  },
+  progressContainer: {
+    alignItems: 'center',
+    paddingVertical: 8,
+    marginBottom: 10,
+  },
+  progressText: {
+    color: '#00ccff',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
