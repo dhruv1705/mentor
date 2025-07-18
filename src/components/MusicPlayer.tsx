@@ -22,9 +22,9 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [playbackPosition, setPlaybackPosition] = useState(0);
   const [playbackDuration, setPlaybackDuration] = useState(0);
-  const [volume, setVolume] = useState(1.0);
+  const [volume, setVolume] = useState(0.8);
   const [isMuted, setIsMuted] = useState(false);
-  const [originalVolume, setOriginalVolume] = useState(1.0);
+  const [originalVolume, setOriginalVolume] = useState(0.8);
 
   useEffect(() => {
     loadTrack();
