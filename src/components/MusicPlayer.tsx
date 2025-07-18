@@ -23,7 +23,6 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
   const [playbackPosition, setPlaybackPosition] = useState(0);
   const [playbackDuration, setPlaybackDuration] = useState(0);
   const [volume, setVolume] = useState(0.8);
-  const [isMuted, setIsMuted] = useState(false);
   const [originalVolume, setOriginalVolume] = useState(0.8);
 
   useEffect(() => {
@@ -64,12 +63,12 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
         playbackPosition,
         playbackDuration,
         volume,
-        isMuted,
+        isMuted: volume === 0,
         repeatMode: 'none',
         shuffleMode: false,
       });
     }
-  }, [isPlaying, isLoading, playbackPosition, playbackDuration, volume, isMuted]);
+  }, [isPlaying, isLoading, playbackPosition, playbackDuration, volume]);
 
   const loadTrack = async () => {
     try {
@@ -101,7 +100,7 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
         { 
           shouldPlay: false,
           volume: volume,
-          isMuted: isMuted,
+          isMuted: volume === 0,
         },
         onPlaybackStatusUpdate
       );
@@ -189,16 +188,10 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
     }
   };
 
-  const toggleMute = async () => {
-    if (!sound) return;
-
-    try {
-      const newMutedState = !isMuted;
-      await sound.setIsMutedAsync(newMutedState);
-      setIsMuted(newMutedState);
-    } catch (error) {
-      console.error('Error toggling mute:', error);
-    }
+  const handleVolumeSliderPress = (position: number) => {
+    // Calculate volume based on tap position (0-1)
+    const newVolume = Math.max(0, Math.min(1, position));
+    changeVolume(newVolume);
   };
 
   const changeVolume = async (newVolume: number) => {
@@ -278,17 +271,33 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
 
       {/* Controls */}
       <View style={styles.controlsContainer}>
-        <TouchableOpacity
-          style={styles.controlButton}
-          onPress={toggleMute}
-          disabled={isLoading}
-        >
-          <Feather
-            name={isMuted ? 'volume-x' : 'volume-2'}
-            size={20}
-            color={isMuted ? '#ff4757' : '#00ccff'}
+        <View style={styles.volumeSliderContainer}>
+          <Feather 
+            name={volume === 0 ? 'volume-x' : volume < 0.5 ? 'volume-1' : 'volume-2'} 
+            size={16} 
+            color="#00ccff" 
           />
-        </TouchableOpacity>
+          <View style={styles.volumeSlider}>
+            <TouchableOpacity
+              style={styles.volumeSliderTrack}
+              onPress={(event) => {
+                const { locationX } = event.nativeEvent;
+                const sliderWidth = 80; // Approximate slider width
+                const position = locationX / sliderWidth;
+                handleVolumeSliderPress(position);
+              }}
+              activeOpacity={1}
+            >
+              <View 
+                style={[
+                  styles.volumeSliderFill,
+                  { width: `${volume * 100}%` }
+                ]}
+              />
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.volumeText}>{Math.round(volume * 100)}%</Text>
+        </View>
 
         <TouchableOpacity
           style={[styles.controlButton, styles.playButton]}
@@ -438,6 +447,36 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: '#00ccff',
     borderRadius: 2,
+  },
+  volumeSliderContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginHorizontal: 8,
+  },
+  volumeSlider: {
+    marginHorizontal: 8,
+  },
+  volumeSliderTrack: {
+    width: 80,
+    height: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  volumeSliderFill: {
+    height: '100%',
+    backgroundColor: '#00ccff',
+    borderRadius: 2,
+  },
+  volumeText: {
+    fontSize: 10,
+    color: '#00ccff',
+    minWidth: 28,
+    textAlign: 'center',
   },
 });
 

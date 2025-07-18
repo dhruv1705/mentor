@@ -7,7 +7,7 @@ export const MUSIC_TRACKS: Omit<MusicTrack, 'id' | 'created_at' | 'updated_at'>[
     title: 'Upbeat Morning Music',
     artist: 'Morning Energy',
     duration: 240000, // 4 minutes estimated
-    url: 'https://storage.googleapis.com/lifesparkbucket/lifeguide/morning/ytdl.canehill.info%20-%20Upbeat%20Morning%20Music%20-%20Upbeat%20Morning%20Music%20(320%20KBps).mp3',
+    url: 'https://storage.googleapis.com/lifesparkbucket/lifeguide/sleep/puritysleeppiano.mp3',
     thumbnail: 'https://storage.googleapis.com/lifesparkbucket/lifeguide/morning/upbeat-morning-thumbnail.jpg',
     genre: 'Morning',
     album: 'Morning Energy Collection',
@@ -25,7 +25,8 @@ export const MUSIC_TRACKS: Omit<MusicTrack, 'id' | 'created_at' | 'updated_at'>[
     title: 'Ambient Unspoken',
     artist: 'The Ambientalist',
     duration: 480000, // 8 minutes estimated
-    url: 'https://storage.googleapis.com/lifesparkbucket/lifeguide/ambient/ytdl.canehill.info%20-%20The%20Ambientalist%20-%20Unspoken%20(320%20KBps).mp3',
+    //url: 'https://storage.googleapis.com/lifesparkbucket/lifeguide/ambient/ytdl.canehill.info%20-%20The%20Ambientalist%20-%20Unspoken%20(320%20KBps).mp3',
+    url: 'https://storage.googleapis.com/lifesparkbucket/lifeguide/sleep/puritysleeppiano.mp3',
     thumbnail: 'https://storage.googleapis.com/lifesparkbucket/lifeguide/ambient/ambient-thumbnail.jpg',
     genre: 'Ambient',
     album: 'Ambient Collection',

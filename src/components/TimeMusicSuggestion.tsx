@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Alert } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { Audio } from 'expo-av';
 import { TimeMusicService, TimeMusicSuggestion as TimeMusicSuggestionType } from '../services/timeMusicService';
-import { ttsService } from '../services/ttsService';
 import { MUSIC_TRACKS } from '../data/musicData';
-import { AudioUtils } from '../utils/audioUtils';
 import { settingsService } from '../services/settingsService';
+import { globalMusicService, GlobalMusicState } from '../services/globalMusicService';
 
 interface TimeMusicSuggestionProps {
   onMusicPlay?: (track: any) => void;
@@ -15,12 +13,8 @@ interface TimeMusicSuggestionProps {
 export const TimeMusicSuggestion: React.FC<TimeMusicSuggestionProps> = ({ onMusicPlay }) => {
   const [suggestion, setSuggestion] = useState<TimeMusicSuggestionType | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
-  const [playbackStatus, setPlaybackStatus] = useState<any>(null);
-  const [originalVolume, setOriginalVolume] = useState(1.0);
   const [autoPlayEnabled, setAutoPlayEnabled] = useState(true);
+  const [musicState, setMusicState] = useState<GlobalMusicState>(globalMusicService.getState());
 
   useEffect(() => {
     loadTimeMusicSuggestion();
@@ -29,10 +23,15 @@ export const TimeMusicSuggestion: React.FC<TimeMusicSuggestionProps> = ({ onMusi
     const settings = settingsService.getSettings();
     setAutoPlayEnabled(settings.musicAutoPlay);
     
+    // Listen for global music state changes
+    const handleMusicStateChange = (state: GlobalMusicState) => {
+      setMusicState(state);
+    };
+    
+    globalMusicService.addListener(handleMusicStateChange);
+    
     return () => {
-      if (sound) {
-        sound.unloadAsync();
-      }
+      globalMusicService.removeListener(handleMusicStateChange);
     };
   }, []);
 
@@ -48,32 +47,14 @@ export const TimeMusicSuggestion: React.FC<TimeMusicSuggestionProps> = ({ onMusi
 
   // Auto-play music after loading suggestion
   useEffect(() => {
-    if (!loading && autoPlayEnabled && suggestion) {
+    if (!loading && autoPlayEnabled && suggestion && !musicState.sound) {
       const timer = setTimeout(() => {
         handleAutoPlay();
       }, 2500); // 2.5 second delay
       
       return () => clearTimeout(timer);
     }
-  }, [loading, suggestion, autoPlayEnabled]);
-
-  // Listen for TTS status changes for volume ducking
-  useEffect(() => {
-    const handleTtsStatusChange = (status: any) => {
-      if (sound && isPlaying) {
-        if (status.isPlaying) {
-          // Duck volume when TTS starts
-          duckVolume();
-        } else {
-          // Restore volume when TTS stops
-          restoreVolume();
-        }
-      }
-    };
-
-    ttsService.addStatusListener(handleTtsStatusChange);
-    return () => ttsService.removeStatusListener(handleTtsStatusChange);
-  }, [sound, isPlaying]);
+  }, [loading, suggestion, autoPlayEnabled, musicState.sound]);
 
   const loadTimeMusicSuggestion = async () => {
     try {
@@ -81,17 +62,9 @@ export const TimeMusicSuggestion: React.FC<TimeMusicSuggestionProps> = ({ onMusi
       const timeSuggestion = await TimeMusicService.getCurrentTimeMusicSuggestion();
       setSuggestion(timeSuggestion);
     } catch (error) {
-      console.error('Error loading time music suggestion:', error);
+      // Error loading suggestion - use fallback
     } finally {
       setLoading(false);
-    }
-  };
-
-  const onPlaybackStatusUpdate = (status: any) => {
-    setPlaybackStatus(status);
-    if (status.didJustFinish) {
-      setIsPlaying(false);
-      setSound(null);
     }
   };
 
@@ -103,131 +76,42 @@ export const TimeMusicSuggestion: React.FC<TimeMusicSuggestionProps> = ({ onMusi
     if (!autoPlayEnabled) return;
     
     try {
-      let trackToPlay;
+      let trackUrl;
       
       if (suggestion?.recommendedTrack) {
-        trackToPlay = { uri: suggestion.recommendedTrack.url };
+        trackUrl = suggestion.recommendedTrack.url;
       } else {
         // Use fallback ambient track from musicData
         const fallbackTrack = getFallbackTrack();
-        trackToPlay = { uri: fallbackTrack?.url || '' };
+        trackUrl = fallbackTrack?.url || '';
       }
 
-      await playTrack(trackToPlay);
+      if (trackUrl) {
+        await globalMusicService.playTrack(trackUrl);
+      }
     } catch (error) {
-      console.error('Error in auto-play:', error);
+      // Error in auto-play - continue silently
     }
   };
 
   const handlePlaySuggestion = async () => {
     if (!suggestion?.recommendedTrack) return;
-    await playTrack({ uri: suggestion.recommendedTrack.url });
-  };
-
-  const playTrack = async (trackSource: any) => {
+    
     try {
-      setIsLoading(true);
-
-      // Stop any existing sound
-      if (sound) {
-        await sound.unloadAsync();
-        setSound(null);
-      }
-
-      // Don't stop TTS anymore - let volume ducking handle it
-      // const ttsStatus = ttsService.getStatus();
-      // if (ttsStatus.isPlaying) {
-      //   await ttsService.stop();
-      // }
-
-      // Configure audio session
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        staysActiveInBackground: true,
-        playsInSilentModeIOS: true,
-        shouldDuckAndroid: true,
-        playThroughEarpieceAndroid: false,
-      });
-
-      // Load and play the track with fade-in
-      const { sound: newSound } = await Audio.Sound.createAsync(
-        trackSource,
-        { shouldPlay: true, volume: 0 }, // Start at 0 volume for fade-in
-        onPlaybackStatusUpdate
-      );
-
-      setSound(newSound);
-      setIsPlaying(true);
-
-      // Check if TTS is currently playing and duck volume, otherwise fade in normally
-      const ttsStatus = ttsService.getStatus();
-      if (ttsStatus.isPlaying) {
-        await AudioUtils.fadeIn(newSound, originalVolume * 0.25, { duration: 500 });
-      } else {
-        await AudioUtils.fadeIn(newSound, originalVolume, { duration: 500 });
-      }
-
+      await globalMusicService.playTrack(suggestion.recommendedTrack.url);
     } catch (error) {
-      console.error('Error playing track:', error);
       Alert.alert('Error', 'Failed to play music track');
-    } finally {
-      setIsLoading(false);
     }
   };
 
-  const handlePauseResume = async () => {
-    if (!sound) return;
-
-    try {
-      if (isPlaying) {
-        await sound.pauseAsync();
-        setIsPlaying(false);
-      } else {
-        await sound.playAsync();
-        setIsPlaying(true);
-      }
-    } catch (error) {
-      console.error('Error pausing/resuming track:', error);
-    }
+  const adjustVolume = (delta: number) => {
+    const newVolume = Math.max(0, Math.min(1, musicState.currentVolume + delta));
+    globalMusicService.setVolume(newVolume);
   };
 
-  const handleStop = async () => {
-    if (!sound) return;
-
-    try {
-      await sound.stopAsync();
-      await sound.unloadAsync();
-      setSound(null);
-      setIsPlaying(false);
-      setPlaybackStatus(null);
-    } catch (error) {
-      console.error('Error stopping track:', error);
-    }
+  const toggleVolumeSlider = () => {
+    globalMusicService.toggleVolumeSlider();
   };
-
-  const duckVolume = async () => {
-    if (!sound) return;
-    
-    try {
-      // Smooth volume transition to 25%
-      await AudioUtils.duckVolume(sound, originalVolume, { duration: 200 });
-    } catch (error) {
-      console.error('Error ducking volume:', error);
-    }
-  };
-
-  const restoreVolume = async () => {
-    if (!sound) return;
-    
-    try {
-      // Smooth volume transition back to original
-      await AudioUtils.restoreVolume(sound, originalVolume, { duration: 200 });
-    } catch (error) {
-      console.error('Error restoring volume:', error);
-    }
-  };
-
-
 
   if (loading) {
     return (
@@ -244,22 +128,55 @@ export const TimeMusicSuggestion: React.FC<TimeMusicSuggestionProps> = ({ onMusi
 
   return (
     <View style={styles.actions}>
-      {sound ? (
-        <TouchableOpacity
-          style={styles.playButton}
-          onPress={handlePauseResume}
-          activeOpacity={0.7}
-        >
-          <Feather name="music" size={20} color={isPlaying ? "#00ccff" : "#888888"} />
-        </TouchableOpacity>
+      {musicState.sound ? (
+        <View style={styles.musicControlsContainer}>
+          <TouchableOpacity
+            style={styles.volumeIconButton}
+            onPress={toggleVolumeSlider}
+            activeOpacity={0.7}
+          >
+            <Feather 
+              name={musicState.currentVolume === 0 ? 'volume-x' : musicState.currentVolume < 0.5 ? 'volume-1' : 'volume-2'} 
+              size={18} 
+              color={musicState.isPlaying ? "#00ccff" : "#888888"} 
+            />
+          </TouchableOpacity>
+          
+          <View style={[
+            styles.volumeSliderContainer,
+            { opacity: musicState.showVolumeSlider ? 1 : 0 }
+          ]}>
+            <View style={styles.volumeControlsRow}>
+              <TouchableOpacity
+                style={styles.volumeMinusButton}
+                onPress={() => adjustVolume(-0.1)}
+                activeOpacity={0.7}
+                disabled={!musicState.showVolumeSlider}
+              >
+                <Feather name="minus" size={16} color="#00ccff" />
+              </TouchableOpacity>
+              
+              <Text style={styles.volumeText}>{Math.round(musicState.currentVolume * 100)}%</Text>
+              
+              <TouchableOpacity
+                style={styles.volumePlusButton}
+                onPress={() => adjustVolume(0.1)}
+                activeOpacity={0.7}
+                disabled={!musicState.showVolumeSlider}
+              >
+                <Feather name="plus" size={16} color="#00ccff" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       ) : (
         <TouchableOpacity
-          style={[styles.playButton, isLoading && styles.playButtonDisabled]}
+          style={[styles.playButton, musicState.isLoading && styles.playButtonDisabled]}
           onPress={handlePlaySuggestion}
           activeOpacity={0.7}
-          disabled={isLoading}
+          disabled={musicState.isLoading}
         >
-          {isLoading ? (
+          {musicState.isLoading ? (
             <Feather name="loader" size={20} color="#ffffff" />
           ) : (
             <Feather name="music" size={20} color="#00ccff" />
@@ -298,6 +215,69 @@ const styles = StyleSheet.create({
   },
   playButtonDisabled: {
     opacity: 0.6,
+  },
+  musicControlsContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  volumeIconButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 25,
+    width: 50,
+    height: 50,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 204, 255, 0.3)',
+  },
+  volumeSliderContainer: {
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 204, 255, 0.4)',
+    shadowColor: '#00ccff',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+    maxWidth: 280,
+    alignSelf: 'center',
+    minHeight: 50,
+    justifyContent: 'center',
+    position: 'absolute',
+    top: 50,
+    left: -115,
+  },
+  volumeControlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    minHeight: 30, // Consistent row height
+  },
+  volumeMinusButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 15,
+    width: 30,
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  volumePlusButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 15,
+    width: 30,
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  volumeText: {
+    fontSize: 12,
+    color: '#00ccff',
+    minWidth: 40,
+    textAlign: 'center',
+    fontWeight: '600',
   },
 });
 
