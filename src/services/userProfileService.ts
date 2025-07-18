@@ -32,6 +32,7 @@ export class UserProfileService {
       const profileData = {
         user_id: userId,
         email,
+        name: 'Voice Assistant User', // Provide default name to satisfy NOT NULL constraint
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
@@ -173,26 +174,29 @@ export class UserProfileService {
       if (needsCleanup) {
         const updates: Partial<UserProfile> = {};
         
-        if (profile.name === 'Voice Assistant User') {
-          updates.name = null;
+        // Don't set name to null if database has NOT NULL constraint
+        // Instead, keep it as 'Voice Assistant User' until user provides real name
+        // The profile completion logic already handles this case
+        
+        // Only update if we have other fields to clean up
+        if (Object.keys(updates).length > 0) {
+          const { data, error } = await supabase
+            .from('user_profiles')
+            .update({
+              ...updates,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('user_id', profile.user_id)
+            .select()
+            .single();
+          
+          if (error) {
+            console.error('Error cleaning up old defaults:', error);
+            return profile;
+          }
+          
+          return data;
         }
-        
-        const { data, error } = await supabase
-          .from('user_profiles')
-          .update({
-            ...updates,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('user_id', profile.user_id)
-          .select()
-          .single();
-        
-        if (error) {
-          console.error('Error cleaning up old defaults:', error);
-          return profile;
-        }
-        
-        return data;
       }
       
       return profile;
@@ -217,7 +221,10 @@ export class UserProfileService {
     // Handle both number and string types from database
     const hasAge = (typeof profile.age === 'number' && profile.age > 0) || 
                    (typeof profile.age === 'string' && parseInt(profile.age) > 0);
-    const hasGender = Boolean(profile.gender && profile.gender !== 'Not_Specified' && profile.gender !== 'not_specified');
+    // Check for all variations of "not specified" values (case-insensitive)
+    const invalidGenderValues = ['not_specified', 'not specified'];
+    const hasGender = Boolean(profile.gender && 
+      !invalidGenderValues.includes(profile.gender.toLowerCase().replace('_', ' ')));
     const hasHeight = (typeof profile.height === 'number' && profile.height > 0) || 
                       (typeof profile.height === 'string' && parseInt(profile.height) > 0);
     const hasName = Boolean(profile.name?.trim() && profile.name.trim() !== 'Voice Assistant User');
