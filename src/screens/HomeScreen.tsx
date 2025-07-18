@@ -121,7 +121,7 @@ const styles = StyleSheet.create({
   },
   musicButtonContainer: {
     position: 'absolute',
-    top: 110,
+    top: 120,
     right: 20,
     zIndex: 999,
     alignItems: 'center',

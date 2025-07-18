@@ -1,5 +1,5 @@
 export interface ScheduleExtraction {
-  type: 'wake' | 'breakfast' | 'lunch' | 'dinner' | 'sleep';
+  type: 'wake' | 'breakfast' | 'lunch' | 'dinner' | 'sleep' | 'target_wake' | 'target_breakfast' | 'target_lunch' | 'target_dinner' | 'target_sleep';
   time: string; // 24-hour format HH:MM
   confidence: number; // 0-1 confidence score
   originalText: string;
@@ -46,6 +46,26 @@ export class ScheduleExtractor {
       /\b(sleep|go\s+to\s+sleep|going\s+to\s+sleep)\s+(?:at\s+)?/gi,
       /\b(bedtime|go\s+to\s+bed|going\s+to\s+bed)\s+(?:at\s+)?/gi,
       /\b(night\s+routine|end\s+my\s+day)\s+(?:at\s+)?/gi,
+    ],
+    target_wake: [
+      /\b(would\s+like\s+to\s+wake|want\s+to\s+wake|target\s+wake|ideal\s+wake)\s+(?:up\s+)?(?:at\s+)?/gi,
+      /\b(prefer\s+to\s+wake|hope\s+to\s+wake)\s+(?:up\s+)?(?:at\s+)?/gi,
+    ],
+    target_breakfast: [
+      /\b(would\s+like\s+to\s+have\s+breakfast|want\s+to\s+have\s+breakfast|target\s+breakfast|ideal\s+breakfast)\s+(?:at\s+)?/gi,
+      /\b(prefer\s+to\s+have\s+breakfast|hope\s+to\s+have\s+breakfast)\s+(?:at\s+)?/gi,
+    ],
+    target_lunch: [
+      /\b(would\s+like\s+to\s+have\s+lunch|want\s+to\s+have\s+lunch|target\s+lunch|ideal\s+lunch)\s+(?:at\s+)?/gi,
+      /\b(prefer\s+to\s+have\s+lunch|hope\s+to\s+have\s+lunch)\s+(?:at\s+)?/gi,
+    ],
+    target_dinner: [
+      /\b(would\s+like\s+to\s+have\s+dinner|want\s+to\s+have\s+dinner|target\s+dinner|ideal\s+dinner)\s+(?:at\s+)?/gi,
+      /\b(prefer\s+to\s+have\s+dinner|hope\s+to\s+have\s+dinner)\s+(?:at\s+)?/gi,
+    ],
+    target_sleep: [
+      /\b(would\s+like\s+to\s+sleep|want\s+to\s+sleep|target\s+sleep|ideal\s+sleep)\s+(?:at\s+)?/gi,
+      /\b(prefer\s+to\s+sleep|hope\s+to\s+sleep)\s+(?:at\s+)?/gi,
     ],
   };
 
