@@ -11,23 +11,13 @@ export default function HomeScreen() {
   const [speechText, setSpeechText] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [speechCompleted, setSpeechCompleted] = useState(false);
-  const [speechCountdown, setSpeechCountdown] = useState(0);
   const speechRecognitionRef = useRef<any>(null);
   const claudeChatRef = useRef<any>(null);
   const { schedule } = useAuth();
 
   const handleSpeechTextChange = (newText: string) => {
+    console.log('🔥 HomeScreen handleSpeechTextChange - newText:', newText);
     setSpeechText(newText);
-    setSpeechCompleted(false);
-  };
-
-  const handleSpeechComplete = () => {
-    setSpeechCompleted(true);
-  };
-
-  const handleCountdownChange = (countdown: number) => {
-    setSpeechCountdown(countdown);
   };
 
   const handleStartListening = () => {
@@ -43,8 +33,8 @@ export default function HomeScreen() {
   };
 
   const handleClearText = () => {
+    console.log('🔥 HomeScreen handleClearText called!');
     setSpeechText('');
-    setSpeechCompleted(false);
     if (speechRecognitionRef.current) {
       speechRecognitionRef.current.clearText();
     }
@@ -122,11 +112,9 @@ export default function HomeScreen() {
           onTextChange={handleSpeechTextChange} 
           text={speechText}
           onListeningChange={setIsListening}
-          onSpeechComplete={handleSpeechComplete}
           ref={speechRecognitionRef}
           isSpeaking={isSpeaking}
           onOrbTap={handleOrbTap}
-          onCountdownChange={handleCountdownChange}
         />
         
         {/* Show getting started message based on orb state */}
@@ -146,10 +134,8 @@ export default function HomeScreen() {
           onStartListening={handleStartListening}
           onStopListening={handleStopListening}
           onClearText={handleClearText}
-          speechCompleted={speechCompleted}
           onSpeakingChange={setIsSpeaking}
           ref={claudeChatRef}
-          speechCountdown={speechCountdown}
         />
       </ScrollView>
     </KeyboardAvoidingView>

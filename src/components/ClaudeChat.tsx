@@ -12,9 +12,7 @@ interface ClaudeChatProps {
   onStartListening?: () => void;
   onStopListening?: () => void;
   onClearText?: () => void;
-  speechCompleted?: boolean;
   onSpeakingChange?: (isSpeaking: boolean) => void;
-  speechCountdown?: number;
 }
 
 interface ClaudeChatHandle {
@@ -38,9 +36,7 @@ const ClaudeChat = forwardRef<ClaudeChatHandle, ClaudeChatProps>((props, ref) =>
     onStartListening,
     onStopListening,
     onClearText,
-    speechCompleted,
-    onSpeakingChange,
-    speechCountdown = 0
+    onSpeakingChange
   } = props;
   const [inputText, setInputText] = useState(initialText);
   const [isLoading, setIsLoading] = useState(false);
@@ -48,9 +44,7 @@ const ClaudeChat = forwardRef<ClaudeChatHandle, ClaudeChatProps>((props, ref) =>
   const [error, setError] = useState<string | null>(null);
   const [ttsStatus, setTtsStatus] = useState<TTSStatus>(ttsService.getStatus());
   const [profileUpdateNotification, setProfileUpdateNotification] = useState<string | null>(null);
-  const [autoSendEnabled, setAutoSendEnabled] = useState(true);
-  const [autoSendCountdown, setAutoSendCountdown] = useState(0);
-  const [autoSendTimeoutId, setAutoSendTimeoutId] = useState<NodeJS.Timeout | null>(null);
+  // Auto-send functionality removed for simplicity
   const [currentTtsProvider, setCurrentTtsProvider] = useState<TTSProvider>('system');
   const [elevenLabsAvailable, setElevenLabsAvailable] = useState(false);
   const [orbState, setOrbState] = useState<'idle' | 'speaking' | 'listening'>('idle');
@@ -62,9 +56,15 @@ const ClaudeChat = forwardRef<ClaudeChatHandle, ClaudeChatProps>((props, ref) =>
     let questionNumber = 1;
     
     // Check if profile question (1) is completed - any profile field means we can move to question 2
+    const hasValidGender = profile?.gender && 
+                          profile.gender !== 'not_specified' && 
+                          profile.gender !== 'Not specified' &&
+                          profile.gender !== 'Not provided' &&
+                          profile.gender !== 'not provided' &&
+                          profile.gender !== '';
     const hasAnyProfileInfo = (profile?.name && profile.name !== 'Voice Assistant User') || 
                               profile?.age || 
-                              profile?.gender || 
+                              hasValidGender || 
                               (profile?.height && profile.height > 0);
     
     if (hasAnyProfileInfo) questionNumber = Math.max(questionNumber, 2);
@@ -237,30 +237,7 @@ const ClaudeChat = forwardRef<ClaudeChatHandle, ClaudeChatProps>((props, ref) =>
     setInputText(initialText);
   }, [initialText]);
 
-  // Start auto-send timer when speech recognition completes
-  useEffect(() => {
-    if (speechCompleted && initialText.trim() && autoSendEnabled && !isLoading) {
-      startAutoSendTimer();
-    }
-  }, [speechCompleted, initialText]);
-
-  // Auto-send countdown timer
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (autoSendCountdown > 0) {
-      interval = setInterval(() => {
-        setAutoSendCountdown(prev => prev - 1);
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [autoSendCountdown]);
-
-  // Auto-send when countdown reaches 0
-  useEffect(() => {
-    if (autoSendCountdown === 0 && autoSendTimeoutId && inputText.trim()) {
-      sendMessage();
-    }
-  }, [autoSendCountdown]);
+  // Auto-send functionality removed - manual send only
 
   // Set up TTS status listener and load TTS info
   useEffect(() => {
@@ -370,24 +347,16 @@ const ClaudeChat = forwardRef<ClaudeChatHandle, ClaudeChatProps>((props, ref) =>
     if (!inputText.trim() || isLoading) return;
 
     const messageToSend = inputText.trim();
-    setInputText('');
     setError(null);
     setIsLoading(true);
     
-    // Clear auto-send timer and countdown
-    if (autoSendTimeoutId) {
-      clearTimeout(autoSendTimeoutId);
-      setAutoSendTimeoutId(null);
-    }
-    setAutoSendCountdown(0);
-    
-    // Clear speech text in parent component to prevent accumulation
-    if (onClearText) {
-      onClearText();
-    }
+    // Auto-send functionality removed
 
     try {
       const response = await claudeApi.sendMessage(messageToSend);
+      
+      // Only clear input field AFTER successful send - keep speech text
+      setInputText('');
       
       // Automatically transition to speaking state (Red → Green)
       setOrbState('speaking');
@@ -409,6 +378,7 @@ const ClaudeChat = forwardRef<ClaudeChatHandle, ClaudeChatProps>((props, ref) =>
     } catch (error) {
       setError('Failed to send message. Please try again.');
       console.error('Chat error:', error);
+      // Keep text on error - don't clear input or speech text
       // Fall back to idle state on error
       await handleErrorFallback();
     } finally {
@@ -478,20 +448,7 @@ const ClaudeChat = forwardRef<ClaudeChatHandle, ClaudeChatProps>((props, ref) =>
     );
   };
 
-  const startAutoSendTimer = () => {
-    // Clear any existing timer
-    if (autoSendTimeoutId) {
-      clearTimeout(autoSendTimeoutId);
-    }
-    
-    // Start 4-second countdown
-    setAutoSendCountdown(4);
-    const timeoutId = setTimeout(() => {
-      setAutoSendCountdown(0);
-    }, 4000);
-    
-    setAutoSendTimeoutId(timeoutId);
-  };
+  // startAutoSendTimer function removed
 
   const retryLastMessage = async () => {
     const lastMessage = claudeApi.getLastUserMessage();
@@ -567,11 +524,7 @@ const ClaudeChat = forwardRef<ClaudeChatHandle, ClaudeChatProps>((props, ref) =>
       </View>
 
       <View style={styles.inputContainer}>
-        {isListening && speechCountdown && speechCountdown > 0 ? (
-          <View style={styles.countdownContainer}>
-            <Text style={styles.countdownText}>Auto-stop in {speechCountdown}s</Text>
-          </View>
-        ) : null}
+        {/* Countdown removed for simplicity */}
         <View style={styles.inputRow}>
           <TextInput
             style={[styles.textInput, isListening && styles.textInputRecording]}
@@ -793,15 +746,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: '#00ccff',
   },
-  countdownContainer: {
-    alignItems: 'center',
-    paddingBottom: 8,
-  },
-  countdownText: {
-    fontSize: 12,
-    color: '#FF9500',
-    fontWeight: 'bold',
-  },
+  // Countdown styles removed
   textInputRecording: {
     borderColor: '#FF9500',
     borderWidth: 2,
