@@ -242,6 +242,12 @@ const ClaudeChat = forwardRef<ClaudeChatHandle, ClaudeChatProps>((props, ref) =>
   // Set up TTS status listener and load TTS info
   useEffect(() => {
     const handleTtsStatusChange = (status: TTSStatus) => {
+      console.log('🔊 TTS Status Change:', {
+        isPlaying: status.isPlaying,
+        currentText: status.currentText,
+        currentOrbState: orbState
+      });
+      
       setTtsStatus(status);
       // Update current sentence display
       setCurrentSentence(status.currentSentence);
@@ -249,15 +255,26 @@ const ClaudeChat = forwardRef<ClaudeChatHandle, ClaudeChatProps>((props, ref) =>
       // Update speaking state based on TTS status
       if (status.isPlaying && status.currentText !== null) {
         // TTS is playing - ensure orb state is speaking
+        console.log('🔊 TTS started - setting orb to speaking');
         setOrbState('speaking');
         if (onSpeakingChange) {
           onSpeakingChange(true);
         }
       } else if (!status.isPlaying && status.currentText === null && orbState === 'speaking') {
-        // TTS has completed naturally - stay in speaking state until user taps
+        // TTS has completed naturally - automatically transition to listening in auto-listen mode
+        console.log('🔊 TTS completed - transitioning to listening mode');
         if (onSpeakingChange) {
           onSpeakingChange(false);
         }
+        
+        // Auto-transition to listening after TTS completes
+        setTimeout(() => {
+          console.log('🔊 Auto-transitioning to listening state');
+          setOrbState('listening');
+          if (onStartListening) {
+            onStartListening();
+          }
+        }, 750); // Delay to ensure TTS audio has fully stopped
       }
     };
 
@@ -273,7 +290,7 @@ const ClaudeChat = forwardRef<ClaudeChatHandle, ClaudeChatProps>((props, ref) =>
     return () => {
       ttsService.removeStatusListener(handleTtsStatusChange);
     };
-  }, []);
+  }, [orbState, onStartListening, onSpeakingChange]);
 
   // Set up Claude API context with profile information
   useEffect(() => {

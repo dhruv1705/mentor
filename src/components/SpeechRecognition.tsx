@@ -2,7 +2,7 @@ import React, { useState, useEffect, useImperativeHandle, forwardRef, useRef } f
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, Alert } from 'react-native';
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
 import VoiceAssistantOrb from './VoiceAssistantOrb';
-import { ttsService } from '../services/ttsService';
+import { ttsService, TTSStatus } from '../services/ttsService';
 
 interface SpeechRecognitionProps {
   onTextChange: (text: string) => void;
@@ -10,6 +10,7 @@ interface SpeechRecognitionProps {
   onListeningChange?: (isListening: boolean) => void;
   isSpeaking?: boolean;
   onOrbTap?: () => void;
+  autoListenMode?: boolean;
 }
 
 interface SpeechRecognitionHandle {
@@ -18,7 +19,7 @@ interface SpeechRecognitionHandle {
   clearText: () => void;
 }
 
-const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionProps>(({ onTextChange, text, onListeningChange, isSpeaking = false, onOrbTap }, ref) => {
+const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionProps>(({ onTextChange, text, onListeningChange, isSpeaking = false, onOrbTap, autoListenMode = true }, ref) => {
   const [permissionStatus, setPermissionStatus] = useState('unknown');
   const [isAvailable, setIsAvailable] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -26,7 +27,9 @@ const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionP
   const [isInitializing, setIsInitializing] = useState(true);
   const [supportsOnDevice, setSupportsOnDevice] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState('en-US');
+  const [wasPausedForTTS, setWasPausedForTTS] = useState(false);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const ttsStatusRef = useRef<TTSStatus>(ttsService.getStatus());
   
   // Use refs for reliable access to current values (prevents race conditions)
   const interimTextRef = useRef('');
@@ -38,6 +41,49 @@ const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionP
   useEffect(() => {
     checkAvailability();
   }, []);
+
+  useEffect(() => {
+    if (autoListenMode && permissionStatus === 'granted' && isAvailable && !isInitializing) {
+      startAutoListening();
+    }
+    
+    return () => {
+      // Cleanup if needed
+    };
+  }, [autoListenMode, permissionStatus, isAvailable, isInitializing]);
+
+  // TTS Status Listener for pause/resume logic
+  useEffect(() => {
+    const handleTTSStatusChange = (status: TTSStatus) => {
+      ttsStatusRef.current = status;
+      
+      if (autoListenMode) {
+        if (status.isPlaying && isListening) {
+          // TTS started while listening - pause recognition
+          console.log('TTS started - pausing speech recognition');
+          setWasPausedForTTS(true);
+          stopListening();
+        } else if (!status.isPlaying && wasPausedForTTS && !isListening) {
+          // TTS stopped and we were paused for TTS - resume recognition
+          console.log('TTS stopped - resuming speech recognition');
+          setWasPausedForTTS(false);
+          setTimeout(() => {
+            if (!isListening && !isSpeaking) {
+              startListening();
+            }
+          }, 500); // Increased delay to ensure TTS audio has fully stopped
+        }
+      }
+    };
+
+    // Add TTS status listener
+    ttsService.addStatusListener(handleTTSStatusChange);
+    
+    return () => {
+      // Remove TTS status listener on cleanup
+      ttsService.removeStatusListener(handleTTSStatusChange);
+    };
+  }, [autoListenMode, isListening, wasPausedForTTS, isSpeaking]);
 
   // Notify parent component when listening state changes
   useEffect(() => {
@@ -70,6 +116,33 @@ const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionP
     console.log('🔥 resetSessionState - AFTER baseTextRef:', baseTextRef.current);
   };
 
+  // Simple auto-listening - directly start speech recognition
+  const startAutoListening = async () => {
+    if (!isListening && !isSpeaking) {
+      console.log('Auto-listening mode enabled - starting continuous speech recognition');
+      await startListening();
+    }
+  };
+
+  // Auto-restart listening after speech ends (for continuous mode)
+  const autoRestartListening = async () => {
+    if (autoListenMode && !isSpeaking && permissionStatus === 'granted' && isAvailable) {
+      // Don't restart if TTS is currently playing
+      const currentTTSStatus = ttsService.getStatus();
+      if (currentTTSStatus.isPlaying) {
+        console.log('Skipping auto-restart - TTS is playing');
+        return;
+      }
+      
+      console.log('Auto-restarting speech recognition for continuous listening');
+      setTimeout(async () => {
+        if (!isListening && !isSpeaking && !ttsStatusRef.current.isPlaying) {
+          await startListening();
+        }
+      }, 500); // Small delay before restarting
+    }
+  };
+
   // Expose methods to parent component
   useImperativeHandle(ref, () => ({
     startListening,
@@ -96,6 +169,11 @@ const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionP
     }
     
     setIsListening(false);
+    
+    // Auto-restart if in auto-listening mode
+    if (autoListenMode) {
+      autoRestartListening();
+    }
   });
 
   useSpeechRecognitionEvent('result', (event) => {
@@ -267,6 +345,13 @@ const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionP
       return;
     }
     
+    // Don't start listening if TTS is currently playing
+    const currentTTSStatus = ttsService.getStatus();
+    if (currentTTSStatus.isPlaying) {
+      console.log('Skipping start listening - TTS is playing');
+      return;
+    }
+    
     try {
       console.log('Starting speech recognition - simple accumulation mode');
       resetSessionState();
@@ -332,7 +417,14 @@ const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionP
   // finishSpeaking removed - not needed in simple mode
 
   const handleOrbPress = async () => {
-    if (onOrbTap) {
+    if (autoListenMode) {
+      // In auto mode, orb toggles continuous listening
+      if (isListening) {
+        stopListening();
+      } else {
+        startAutoListening();
+      }
+    } else if (onOrbTap) {
       // Use the simplified orb tap handler from ClaudeChat
       onOrbTap();
     } else {
@@ -359,6 +451,17 @@ const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionP
   return (
     <View style={styles.container}>      
       {/* Smart Status Display - Only show when there are issues */}
+      {autoListenMode && (isListening || wasPausedForTTS) && (
+        <View style={styles.vadStatusContainer}>
+          <Text style={styles.vadStatusText}>
+            {wasPausedForTTS ? '⏸️ Paused for Claude' : '🎤 Auto-listening enabled'}
+          </Text>
+          <Text style={styles.vadStatusSubtext}>
+            {wasPausedForTTS ? 'Will resume when Claude finishes speaking' : 'Speak naturally - no button needed'}
+          </Text>
+        </View>
+      )}
+      
       {(permissionStatus !== 'granted' || !isAvailable) && (
         <TouchableOpacity 
           style={styles.statusContainer}
@@ -517,5 +620,25 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 5,
     fontWeight: '600',
+  },
+  vadStatusContainer: {
+    backgroundColor: '#E8F5E8',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: '#34C759',
+  },
+  vadStatusText: {
+    fontSize: 14,
+    color: '#34C759',
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  vadStatusSubtext: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
   },
 });

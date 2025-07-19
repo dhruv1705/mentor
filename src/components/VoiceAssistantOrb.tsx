@@ -130,7 +130,7 @@ export default function VoiceAssistantOrb({
       if (isRecording) {
         particleMaterialRef.current.color.setHex(0xff0066); // Red for recording
       } else if (isListening) {
-        particleMaterialRef.current.color.setHex(0xff6600); // Orange for listening
+        particleMaterialRef.current.color.setHex(0x9966ff); // Purple for auto-listening/monitoring
       } else if (isSpeaking) {
         particleMaterialRef.current.color.setHex(0x00ff00); // Green for speaking
       } else {
@@ -158,8 +158,16 @@ export default function VoiceAssistantOrb({
       disabled={disabled}
       activeOpacity={0.7}
       accessibilityRole="button"
-      accessibilityLabel={isRecording ? "Stop listening" : isSpeaking ? "Claude is speaking" : "Start conversation"}
-      accessibilityHint="Tap to start conversation with Claude"
+      accessibilityLabel={
+        isRecording ? "Recording speech" : 
+        isListening ? "Monitoring for voice" : 
+        isSpeaking ? "Claude is speaking" : 
+        "Start conversation"
+      }
+      accessibilityHint={
+        isListening ? "Auto-listening enabled. Speak naturally to start recording." : 
+        "Tap to start conversation with Claude"
+      }
     >
       <GLView
         style={styles.glView}
