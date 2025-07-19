@@ -4,6 +4,8 @@ import SpeechRecognition from '../components/SpeechRecognition';
 import ClaudeChat from '../components/ClaudeChat';
 import ProfileIcon from '../components/ProfileIcon';
 import TimeMusicSuggestion from '../components/TimeMusicSuggestion';
+import { ScheduleVisualization } from '../components/ScheduleVisualization';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function HomeScreen() {
   const [speechText, setSpeechText] = useState('');
@@ -13,6 +15,7 @@ export default function HomeScreen() {
   const [speechCountdown, setSpeechCountdown] = useState(0);
   const speechRecognitionRef = useRef<any>(null);
   const claudeChatRef = useRef<any>(null);
+  const { schedule } = useAuth();
 
   const handleSpeechTextChange = (newText: string) => {
     setSpeechText(newText);
@@ -64,6 +67,55 @@ export default function HomeScreen() {
       <View style={styles.musicButtonContainer}>
         <TimeMusicSuggestion />
       </View>
+      
+      {/* Current Daily Schedule Widget */}
+      {schedule && (schedule.weekday || schedule.weekend) && (() => {
+        const currentSchedule = schedule.weekday || schedule.weekend;
+        const scheduleItems = [
+          currentSchedule?.wake_time,
+          currentSchedule?.breakfast_time,
+          currentSchedule?.lunch_time,
+          currentSchedule?.dinner_time,
+          currentSchedule?.sleep_time,
+        ];
+        const setTimes = scheduleItems.filter(time => time).length;
+        const completionPercentage = (setTimes / scheduleItems.length) * 100;
+        
+        return completionPercentage < 100 ? (
+          <View style={styles.scheduleWidgetContainer}>
+            <ScheduleVisualization 
+              schedule={currentSchedule} 
+              compact={true}
+              title="Daily Schedule"
+            />
+          </View>
+        ) : null;
+      })()}
+
+      {/* Target Daily Schedule Widget */}
+      {schedule && (schedule.weekday || schedule.weekend) && (() => {
+        const currentSchedule = schedule.weekday || schedule.weekend;
+        const targetScheduleItems = [
+          currentSchedule?.target_wake_time,
+          currentSchedule?.target_breakfast_time,
+          currentSchedule?.target_lunch_time,
+          currentSchedule?.target_dinner_time,
+          currentSchedule?.target_sleep_time,
+        ];
+        const setTargetTimes = targetScheduleItems.filter(time => time).length;
+        const targetCompletionPercentage = (setTargetTimes / targetScheduleItems.length) * 100;
+        
+        return targetCompletionPercentage < 100 ? (
+          <View style={styles.targetScheduleWidgetContainer}>
+            <ScheduleVisualization 
+              schedule={currentSchedule} 
+              compact={true}
+              showTarget={true}
+              title="Target Schedule"
+            />
+          </View>
+        ) : null;
+      })()}
       
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.contentContainer}>
         <SpeechRecognition 
@@ -139,5 +191,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: '500',
     opacity: 0.8,
+  },
+  scheduleWidgetContainer: {
+    position: 'absolute',
+    top: 160,
+    left: 20,
+    right: 20,
+    zIndex: 998,
+  },
+  targetScheduleWidgetContainer: {
+    position: 'absolute',
+    top: 240,
+    left: 20,
+    right: 20,
+    zIndex: 997,
   },
 });
