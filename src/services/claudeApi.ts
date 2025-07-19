@@ -150,8 +150,8 @@ IMPORTANT GUIDELINES:
     return questionNumber;
   }
 
-  // Extract and save schedule information from user message
-  private async extractAndSaveSchedule(userMessage: string): Promise<void> {
+  // Extract and save schedule information from user message with question context
+  private async extractAndSaveSchedule(userMessage: string, questionNumber?: number): Promise<void> {
     if (!this.context?.onScheduleUpdate) return;
 
     try {
@@ -161,20 +161,46 @@ IMPORTANT GUIDELINES:
       // Process each extracted schedule time
       for (const scheduleInfo of extractedSchedules) {
         if (scheduleInfo.confidence > ScheduleExtractor.getConfidenceThreshold()) {
-          const fieldMap = {
-            wake: 'wake_time',
-            breakfast: 'breakfast_time',
-            lunch: 'lunch_time',
-            dinner: 'dinner_time',
-            sleep: 'sleep_time',
-            target_wake: 'target_wake_time',
-            target_breakfast: 'target_breakfast_time',
-            target_lunch: 'target_lunch_time',
-            target_dinner: 'target_dinner_time',
-            target_sleep: 'target_sleep_time'
-          };
+          let fieldName: string;
           
-          const fieldName = fieldMap[scheduleInfo.type];
+          // Use question context to determine target vs regular fields
+          if (questionNumber === 4) {
+            // Question 4: Target sleep schedule
+            if (scheduleInfo.type === 'sleep' || scheduleInfo.type === 'target_sleep') {
+              fieldName = 'target_sleep_time';
+            } else if (scheduleInfo.type === 'wake' || scheduleInfo.type === 'target_wake') {
+              fieldName = 'target_wake_time';
+            } else {
+              continue; // Skip non-sleep/wake times for question 4
+            }
+          } else if (questionNumber === 5) {
+            // Question 5: Target meal schedule
+            if (scheduleInfo.type === 'breakfast' || scheduleInfo.type === 'target_breakfast') {
+              fieldName = 'target_breakfast_time';
+            } else if (scheduleInfo.type === 'lunch' || scheduleInfo.type === 'target_lunch') {
+              fieldName = 'target_lunch_time';
+            } else if (scheduleInfo.type === 'dinner' || scheduleInfo.type === 'target_dinner') {
+              fieldName = 'target_dinner_time';
+            } else {
+              continue; // Skip non-meal times for question 5
+            }
+          } else {
+            // Questions 2-3 or unknown: Use original field mapping
+            const fieldMap = {
+              wake: 'wake_time',
+              breakfast: 'breakfast_time',
+              lunch: 'lunch_time',
+              dinner: 'dinner_time',
+              sleep: 'sleep_time',
+              target_wake: 'target_wake_time',
+              target_breakfast: 'target_breakfast_time',
+              target_lunch: 'target_lunch_time',
+              target_dinner: 'target_dinner_time',
+              target_sleep: 'target_sleep_time'
+            };
+            fieldName = fieldMap[scheduleInfo.type];
+          }
+          
           if (fieldName) {
             // Update only the specific field
             await this.context.onScheduleUpdate({
@@ -183,7 +209,7 @@ IMPORTANT GUIDELINES:
               userId: this.context.profile?.user_id || '',
               scheduleType: 'weekday'
             });
-            console.log(`✅ Auto-saved schedule: ${scheduleInfo.type} at ${scheduleInfo.time} (confidence: ${scheduleInfo.confidence})`);
+            console.log(`✅ Auto-saved schedule: ${scheduleInfo.type} → ${fieldName} at ${scheduleInfo.time} (confidence: ${scheduleInfo.confidence}, question: ${questionNumber})`);
           }
         }
       }
@@ -276,11 +302,14 @@ IMPORTANT GUIDELINES:
         return 'API key is missing. Please check your .env file and restart the app.';
       }
 
+      // Get current question number for context-aware extraction
+      const currentQuestion = this.getNextQuestionNumber();
+      
       // Extract and save profile information from user message
       await this.extractAndSaveProfile(userMessage);
       
-      // Extract and save schedule information from user message
-      await this.extractAndSaveSchedule(userMessage);
+      // Extract and save schedule information from user message with question context
+      await this.extractAndSaveSchedule(userMessage, currentQuestion);
 
       // Add user message to conversation history
       this.conversationHistory.push({
