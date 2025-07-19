@@ -2,16 +2,15 @@ import React, { useState, useEffect, useImperativeHandle, forwardRef, useRef } f
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, Alert } from 'react-native';
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
 import VoiceAssistantOrb from './VoiceAssistantOrb';
-import { ttsService } from '../services/ttsService';
+import { ttsService, TTSStatus } from '../services/ttsService';
 
 interface SpeechRecognitionProps {
   onTextChange: (text: string) => void;
   text: string;
   onListeningChange?: (isListening: boolean) => void;
-  onSpeechComplete?: () => void;
   isSpeaking?: boolean;
   onOrbTap?: () => void;
-  onCountdownChange?: (countdown: number) => void;
+  autoListenMode?: boolean;
 }
 
 interface SpeechRecognitionHandle {
@@ -20,16 +19,17 @@ interface SpeechRecognitionHandle {
   clearText: () => void;
 }
 
-const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionProps>(({ onTextChange, text, onListeningChange, onSpeechComplete, isSpeaking = false, onOrbTap, onCountdownChange }, ref) => {
+const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionProps>(({ onTextChange, text, onListeningChange, isSpeaking = false, onOrbTap, autoListenMode = true }, ref) => {
   const [permissionStatus, setPermissionStatus] = useState('unknown');
   const [isAvailable, setIsAvailable] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
-  const [timeoutId, setTimeoutId] = useState<NodeJS.Timeout | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
-  const [countdown, setCountdown] = useState(0);
   const [supportsOnDevice, setSupportsOnDevice] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState('en-US');
+  const [wasPausedForTTS, setWasPausedForTTS] = useState(false);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const ttsStatusRef = useRef<TTSStatus>(ttsService.getStatus());
   
   // Use refs for reliable access to current values (prevents race conditions)
   const interimTextRef = useRef('');
@@ -42,6 +42,49 @@ const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionP
     checkAvailability();
   }, []);
 
+  useEffect(() => {
+    if (autoListenMode && permissionStatus === 'granted' && isAvailable && !isInitializing) {
+      startAutoListening();
+    }
+    
+    return () => {
+      // Cleanup if needed
+    };
+  }, [autoListenMode, permissionStatus, isAvailable, isInitializing]);
+
+  // TTS Status Listener for pause/resume logic
+  useEffect(() => {
+    const handleTTSStatusChange = (status: TTSStatus) => {
+      ttsStatusRef.current = status;
+      
+      if (autoListenMode) {
+        if (status.isPlaying && isListening) {
+          // TTS started while listening - pause recognition
+          console.log('TTS started - pausing speech recognition');
+          setWasPausedForTTS(true);
+          stopListening();
+        } else if (!status.isPlaying && wasPausedForTTS && !isListening) {
+          // TTS stopped and we were paused for TTS - resume recognition
+          console.log('TTS stopped - resuming speech recognition');
+          setWasPausedForTTS(false);
+          setTimeout(() => {
+            if (!isListening && !isSpeaking) {
+              startListening();
+            }
+          }, 500); // Increased delay to ensure TTS audio has fully stopped
+        }
+      }
+    };
+
+    // Add TTS status listener
+    ttsService.addStatusListener(handleTTSStatusChange);
+    
+    return () => {
+      // Remove TTS status listener on cleanup
+      ttsService.removeStatusListener(handleTTSStatusChange);
+    };
+  }, [autoListenMode, isListening, wasPausedForTTS, isSpeaking]);
+
   // Notify parent component when listening state changes
   useEffect(() => {
     if (onListeningChange) {
@@ -49,60 +92,55 @@ const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionP
     }
   }, [isListening, onListeningChange]);
 
-  // Consolidated function to move interim text to final text (prevents race conditions)
-  const moveInterimToFinal = () => {
-    if (isProcessingRef.current) return; // Prevent concurrent processing
-    isProcessingRef.current = true;
-    
-    try {
-      const currentInterim = interimTextRef.current.trim();
-      const currentAccumulated = accumulatedFinalTextRef.current.trim();
-      
-      if (currentInterim || currentAccumulated) {
-        // Add any remaining interim text to accumulated final text
-        if (currentInterim) {
-          accumulatedFinalTextRef.current = currentAccumulated + 
-            (currentAccumulated ? ' ' : '') + 
-            currentInterim;
-        }
-        
-        // Build final text from base + accumulated final
-        const baseText = baseTextRef.current.trim();
-        const finalText = accumulatedFinalTextRef.current.trim();
-        
-        let completeText = baseText;
-        if (finalText) {
-          completeText += (baseText ? ' ' : '') + finalText;
-        }
-        
-        onTextChange(completeText || '');
-        
-        // Reset accumulated text and interim text
-        accumulatedFinalTextRef.current = '';
-        interimTextRef.current = '';
-        setTranscript('');
-        
-        // Notify that speech is complete
-        if (onSpeechComplete) {
-          onSpeechComplete();
-        }
-      } else if (onSpeechComplete) {
-        // Even if no new text, notify that speech is complete
-        onSpeechComplete();
-      }
-    } finally {
-      isProcessingRef.current = false;
-    }
+  // Simple text accumulation - no complex processing
+  const simpleTextUpdate = (newText: string) => {
+    const currentBase = baseTextRef.current.trim();
+    const combinedText = currentBase ? currentBase + ' ' + newText : newText;
+    console.log('🔥 simpleTextUpdate - currentBase:', currentBase);
+    console.log('🔥 simpleTextUpdate - newText:', newText);
+    console.log('🔥 simpleTextUpdate - combinedText:', combinedText);
+    baseTextRef.current = combinedText;
+    onTextChange(combinedText);
+    console.log('🔥 simpleTextUpdate - AFTER update baseTextRef:', baseTextRef.current);
   };
 
-  // Reset session state when starting new speech recognition
+  // Simple session reset - NEVER clear accumulated text
   const resetSessionState = () => {
+    console.log('🔥 resetSessionState - BEFORE baseTextRef:', baseTextRef.current);
     interimTextRef.current = '';
     accumulatedFinalTextRef.current = '';
     lastResultIndexRef.current = 0;
     isProcessingRef.current = false;
-    baseTextRef.current = text; // Store the current text as base
+    // Keep existing baseTextRef - NEVER overwrite it
     setTranscript('');
+    console.log('🔥 resetSessionState - AFTER baseTextRef:', baseTextRef.current);
+  };
+
+  // Simple auto-listening - directly start speech recognition
+  const startAutoListening = async () => {
+    if (!isListening && !isSpeaking) {
+      console.log('Auto-listening mode enabled - starting continuous speech recognition');
+      await startListening();
+    }
+  };
+
+  // Auto-restart listening after speech ends (for continuous mode)
+  const autoRestartListening = async () => {
+    if (autoListenMode && !isSpeaking && permissionStatus === 'granted' && isAvailable) {
+      // Don't restart if TTS is currently playing
+      const currentTTSStatus = ttsService.getStatus();
+      if (currentTTSStatus.isPlaying) {
+        console.log('Skipping auto-restart - TTS is playing');
+        return;
+      }
+      
+      console.log('Auto-restarting speech recognition for continuous listening');
+      setTimeout(async () => {
+        if (!isListening && !isSpeaking && !ttsStatusRef.current.isPlaying) {
+          await startListening();
+        }
+      }, 500); // Small delay before restarting
+    }
   };
 
   // Expose methods to parent component
@@ -112,122 +150,70 @@ const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionP
     clearText,
   }));
 
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (countdown > 0) {
-      interval = setInterval(() => {
-        setCountdown(prev => prev - 1);
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [countdown]);
-
-  // Notify parent component when countdown changes
-  useEffect(() => {
-    if (onCountdownChange) {
-      onCountdownChange(countdown);
-    }
-  }, [countdown, onCountdownChange]);
+  // Countdown functionality removed for simplicity
 
   useSpeechRecognitionEvent('start', () => {
-    console.log('Speech recognition started');
+    console.log('Speech recognition started - simple accumulation mode');
     setIsListening(true);
     resetSessionState();
   });
 
   useSpeechRecognitionEvent('end', () => {
-    console.log('Speech recognition ended');
+    console.log('🔥 Speech recognition ended - simple mode');
     
-    // Process any remaining interim text before cleaning up
-    moveInterimToFinal();
+    // ALWAYS treat speech end as final result - add interim text as final
+    if (interimTextRef.current.trim()) {
+      console.log('🔥 Speech ended - treating interim as FINAL:', interimTextRef.current);
+      simpleTextUpdate(interimTextRef.current.trim());
+      interimTextRef.current = '';
+    }
     
     setIsListening(false);
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-      setTimeoutId(null);
+    
+    // Auto-restart if in auto-listening mode
+    if (autoListenMode) {
+      autoRestartListening();
     }
-    setCountdown(0);
   });
 
   useSpeechRecognitionEvent('result', (event) => {
-    console.log('Speech result:', event);
-    console.log('Event results:', JSON.stringify(event.results, null, 2));
-    
     if (event.results && event.results.length > 0) {
-      let newFinalText = '';
-      let newInterimText = '';
-      
-      // Process only new results (those beyond lastResultIndex)
-      for (let i = lastResultIndexRef.current; i < event.results.length; i++) {
+      // Process ALL results, not just the latest one
+      for (let i = 0; i < event.results.length; i++) {
         const result = event.results[i];
-        console.log(`Processing result ${i}:`, result);
+        console.log('🔥 Processing result', i, '- isFinal:', result.isFinal, 'transcript:', result.transcript);
         
-        if (result.isFinal) {
-          newFinalText += result.transcript;
-          console.log('Final transcript found:', result.transcript);
-          lastResultIndexRef.current = i + 1; // Update processed index
-        } else {
-          newInterimText += result.transcript;
-          console.log('Interim transcript found:', result.transcript);
+        if (result.isFinal === true && result.transcript.trim()) {
+          // Final result - add to accumulated text
+          console.log('🔥 FINAL RESULT - calling simpleTextUpdate');
+          simpleTextUpdate(result.transcript.trim());
+        } else if (result.transcript.trim()) {
+          // Interim result - show live feedback but DON'T save to baseTextRef yet
+          console.log('🔥 INTERIM RESULT - showing live feedback');
+          const currentBase = baseTextRef.current.trim();
+          const liveText = currentBase ? currentBase + ' ' + result.transcript.trim() : result.transcript.trim();
+          
+          // Store the current session's interim text (without base)
+          interimTextRef.current = result.transcript.trim();
+          console.log('🔥 INTERIM - currentBase:', currentBase);
+          console.log('🔥 INTERIM - current session text:', result.transcript.trim());
+          console.log('🔥 INTERIM - showing combined:', liveText);
+          
+          onTextChange(liveText);
+          
+          // BACKUP STRATEGY: Set timeout to save text after 2 seconds of no new results
+          if (saveTimeoutRef.current) {
+            clearTimeout(saveTimeoutRef.current);
+          }
+          saveTimeoutRef.current = setTimeout(() => {
+            console.log('🔥 TIMEOUT SAVE - saving interim text to baseTextRef:', result.transcript.trim());
+            if (interimTextRef.current.trim()) {
+              simpleTextUpdate(interimTextRef.current.trim());
+              interimTextRef.current = '';
+            }
+          }, 2000);
         }
       }
-      
-      // Handle final results by accumulating them
-      if (newFinalText.trim()) {
-        console.log('Adding final transcript to accumulated text:', newFinalText);
-        accumulatedFinalTextRef.current += 
-          (accumulatedFinalTextRef.current ? ' ' : '') + 
-          newFinalText.trim();
-        console.log('Accumulated final text:', accumulatedFinalTextRef.current);
-      }
-      
-      // Handle interim results by immediately updating the main TextInput
-      if (newInterimText.trim()) {
-        interimTextRef.current = newInterimText.trim();
-        
-        // Build text from base + accumulated final + interim
-        const baseText = baseTextRef.current.trim();
-        const finalText = accumulatedFinalTextRef.current.trim();
-        
-        let combinedText = baseText;
-        if (finalText) {
-          combinedText += (baseText ? ' ' : '') + finalText;
-        }
-        combinedText += (combinedText ? ' ' : '') + newInterimText.trim();
-        
-        onTextChange(combinedText || '');
-      } else if (newFinalText.trim()) {
-        // Clear interim display when we get final results
-        interimTextRef.current = '';
-        
-        // Update the main TextInput with base + accumulated final text only
-        const baseText = baseTextRef.current.trim();
-        const finalText = accumulatedFinalTextRef.current.trim();
-        
-        let combinedText = baseText;
-        if (finalText) {
-          combinedText += (baseText ? ' ' : '') + finalText;
-        }
-        
-        onTextChange(combinedText || '');
-      }
-      
-      // Reset auto-stop timeout when we get results
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-      
-      // Set auto-stop after 4 seconds of silence with countdown
-      setCountdown(4);
-      const newTimeoutId = setTimeout(() => {
-        if (isListening) {
-          console.log('Auto-stopping due to silence');
-          moveInterimToFinal();
-          stopListening();
-        }
-      }, 4000);
-      
-      setTimeoutId(newTimeoutId);
     }
   });
 
@@ -235,7 +221,6 @@ const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionP
     console.log('Speech recognition error:', event);
     console.log('Error details:', JSON.stringify(event, null, 2));
     setIsListening(false);
-    setCountdown(0);
     
     let errorTitle = 'Speech Recognition Error';
     let errorMessage = 'An unknown error occurred';
@@ -360,8 +345,15 @@ const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionP
       return;
     }
     
+    // Don't start listening if TTS is currently playing
+    const currentTTSStatus = ttsService.getStatus();
+    if (currentTTSStatus.isPlaying) {
+      console.log('Skipping start listening - TTS is playing');
+      return;
+    }
+    
     try {
-      console.log('Starting speech recognition...');
+      console.log('Starting speech recognition - simple accumulation mode');
       resetSessionState();
       setIsListening(true);
       
@@ -406,37 +398,33 @@ const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionP
 
   const stopListening = async () => {
     try {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        setTimeoutId(null);
-      }
-      setCountdown(0);
-      
-      // Process any remaining text before stopping
-      moveInterimToFinal();
-      
       await ExpoSpeechRecognitionModule.stop();
       setIsListening(false);
     } catch (error) {
       Alert.alert('Error', 'Failed to stop listening: ' + error);
       setIsListening(false);
-      setCountdown(0);
-      resetSessionState();
     }
   };
 
   const clearText = () => {
+    console.log('🔥 clearText - BEFORE clear, baseTextRef:', baseTextRef.current);
     onTextChange('');
+    baseTextRef.current = ''; // Clear base text completely
     resetSessionState();
+    console.log('🔥 clearText - AFTER clear, baseTextRef:', baseTextRef.current);
   };
 
-  const finishSpeaking = () => {
-    // Move interim text to final text using the consolidated function
-    moveInterimToFinal();
-  };
+  // finishSpeaking removed - not needed in simple mode
 
   const handleOrbPress = async () => {
-    if (onOrbTap) {
+    if (autoListenMode) {
+      // In auto mode, orb toggles continuous listening
+      if (isListening) {
+        stopListening();
+      } else {
+        startAutoListening();
+      }
+    } else if (onOrbTap) {
       // Use the simplified orb tap handler from ClaudeChat
       onOrbTap();
     } else {
@@ -463,6 +451,17 @@ const SpeechRecognition = forwardRef<SpeechRecognitionHandle, SpeechRecognitionP
   return (
     <View style={styles.container}>      
       {/* Smart Status Display - Only show when there are issues */}
+      {autoListenMode && (isListening || wasPausedForTTS) && (
+        <View style={styles.vadStatusContainer}>
+          <Text style={styles.vadStatusText}>
+            {wasPausedForTTS ? '⏸️ Paused for Claude' : '🎤 Auto-listening enabled'}
+          </Text>
+          <Text style={styles.vadStatusSubtext}>
+            {wasPausedForTTS ? 'Will resume when Claude finishes speaking' : 'Speak naturally - no button needed'}
+          </Text>
+        </View>
+      )}
+      
       {(permissionStatus !== 'granted' || !isAvailable) && (
         <TouchableOpacity 
           style={styles.statusContainer}
@@ -621,5 +620,25 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 5,
     fontWeight: '600',
+  },
+  vadStatusContainer: {
+    backgroundColor: '#E8F5E8',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: '#34C759',
+  },
+  vadStatusText: {
+    fontSize: 14,
+    color: '#34C759',
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  vadStatusSubtext: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
   },
 });

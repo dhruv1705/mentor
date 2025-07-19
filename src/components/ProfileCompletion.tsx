@@ -44,7 +44,15 @@ export const ProfileCompletion: React.FC<ProfileCompletionProps> = ({
         const age = typeof profile.age === 'string' ? parseInt(profile.age) : profile.age;
         return age && age > 0 ? `${age} years old` : '';
       case 'gender':
-        return profile.gender ? profile.gender.replace('_', ' ') : '';
+        // Handle all variations of "not specified" values (case-insensitive)
+        if (profile.gender) {
+          const normalizedGender = profile.gender.toLowerCase().replace('_', ' ');
+          if (['not specified', 'not_specified'].includes(normalizedGender)) {
+            return '';
+          }
+          return profile.gender.replace('_', ' ');
+        }
+        return '';
       case 'height':
         const height = typeof profile.height === 'string' ? parseInt(profile.height) : profile.height;
         return height && height > 0 ? `${height}cm` : '';

@@ -7,6 +7,11 @@ CREATE TABLE user_schedules (
   lunch_time TIME,
   dinner_time TIME,
   sleep_time TIME,
+  target_wake_time TIME,
+  target_breakfast_time TIME,
+  target_lunch_time TIME,
+  target_dinner_time TIME,
+  target_sleep_time TIME,
   schedule_type VARCHAR(20) DEFAULT 'weekday' CHECK (schedule_type IN ('weekday', 'weekend')),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -15,6 +20,13 @@ CREATE TABLE user_schedules (
 -- Create index for faster queries
 CREATE INDEX idx_user_schedules_user_id ON user_schedules(user_id);
 CREATE INDEX idx_user_schedules_schedule_type ON user_schedules(schedule_type);
+
+-- Create indexes for target schedule columns (only when not null for efficiency)
+CREATE INDEX idx_user_schedules_target_wake_time ON user_schedules(target_wake_time) WHERE target_wake_time IS NOT NULL;
+CREATE INDEX idx_user_schedules_target_breakfast_time ON user_schedules(target_breakfast_time) WHERE target_breakfast_time IS NOT NULL;
+CREATE INDEX idx_user_schedules_target_lunch_time ON user_schedules(target_lunch_time) WHERE target_lunch_time IS NOT NULL;
+CREATE INDEX idx_user_schedules_target_dinner_time ON user_schedules(target_dinner_time) WHERE target_dinner_time IS NOT NULL;
+CREATE INDEX idx_user_schedules_target_sleep_time ON user_schedules(target_sleep_time) WHERE target_sleep_time IS NOT NULL;
 
 -- Add RLS (Row Level Security) policies
 ALTER TABLE user_schedules ENABLE ROW LEVEL SECURITY;
