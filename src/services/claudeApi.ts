@@ -118,9 +118,15 @@ IMPORTANT GUIDELINES:
     let questionNumber = 1;
     
     // Check if profile question (1) is completed - any profile field means we can move to question 2
+    const hasValidGender = profile?.gender && 
+                          profile.gender !== 'not_specified' && 
+                          profile.gender !== 'Not specified' &&
+                          profile.gender !== 'Not provided' &&
+                          profile.gender !== 'not provided' &&
+                          profile.gender !== '';
     const hasAnyProfileInfo = (profile?.name && profile.name !== 'Voice Assistant User') || 
                               profile?.age || 
-                              profile?.gender || 
+                              hasValidGender || 
                               (profile?.height && profile.height > 0);
     
     if (hasAnyProfileInfo) questionNumber = Math.max(questionNumber, 2);
@@ -219,8 +225,14 @@ IMPORTANT GUIDELINES:
       
       // Process gender
       if (genderExtraction.value && genderExtraction.confidence > 0.5) {
-        const hasGender = this.context.profile?.gender;
-        console.log('🔍 Gender check - hasGender:', hasGender, 'current profile gender:', this.context.profile?.gender);
+        const currentGender = this.context.profile?.gender;
+        const hasGender = currentGender && 
+          currentGender !== 'not_specified' && 
+          currentGender !== 'Not specified' &&
+          currentGender !== 'Not provided' &&
+          currentGender !== 'not provided' &&
+          currentGender !== '';
+        console.log('🔍 Gender check - hasGender:', hasGender, 'current profile gender:', currentGender);
         
         if (!hasGender) {
           await this.context.onProfileUpdate('gender', genderExtraction.value);

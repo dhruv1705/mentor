@@ -93,7 +93,8 @@ export class ScheduleExtractor {
           );
 
           // Look for time expressions near the activity mention
-          const timeExtraction = this.extractTimeFromContext(contextWindow);
+          const activityPositionInContext = 20; // Activity is at position 20 in the context window (since we subtract 20 from start)
+          const timeExtraction = this.extractTimeFromContext(contextWindow, activityPositionInContext);
           
           if (timeExtraction) {
             extractions.push({
@@ -113,13 +114,24 @@ export class ScheduleExtractor {
   }
 
   // Extract time from context around an activity mention
-  private static extractTimeFromContext(context: string): { time: string; confidence: number; source: 'explicit' | 'implicit' } | null {
-    const timeExpressions = this.findTimeExpressions(context);
+  private static extractTimeFromContext(context: string, activityPosition?: number): { time: string; confidence: number; source: 'explicit' | 'implicit' } | null {
+    const timeExpressions = this.findTimeExpressionsWithPositions(context);
     
     if (timeExpressions.length === 0) return null;
 
-    // Use the first (closest) time expression
-    const timeExpr = timeExpressions[0];
+    let timeExpr;
+    if (activityPosition !== undefined && timeExpressions.length > 1) {
+      // Find the time expression closest to the activity position
+      timeExpr = timeExpressions.reduce((closest, current) => {
+        const closestDistance = Math.abs(closest.position - activityPosition);
+        const currentDistance = Math.abs(current.position - activityPosition);
+        return currentDistance < closestDistance ? current : closest;
+      });
+    } else {
+      // Fall back to first time expression if no position provided or only one time
+      timeExpr = timeExpressions[0];
+    }
+    
     const time24 = this.convertTo24Hour(timeExpr.time, timeExpr.period);
     
     if (!time24) return null;
@@ -131,7 +143,81 @@ export class ScheduleExtractor {
     };
   }
 
-  // Find time expressions in text
+  // Find time expressions in text with positions
+  private static findTimeExpressionsWithPositions(text: string): Array<{ time: string; period?: string; confidence: number; explicit: boolean; position: number }> {
+    const expressions: Array<{ time: string; period?: string; confidence: number; explicit: boolean; position: number }> = [];
+
+    // 12-hour format with AM/PM (highest confidence)
+    const amPmRegex = /(\d{1,2}):?(\d{2})?\s*(AM|PM|A\.M\.|P\.M\.)/gi;
+    let match;
+    while ((match = amPmRegex.exec(text)) !== null) {
+      const hours = match[1];
+      const minutes = match[2] || '00';
+      const rawPeriod = match[3];
+      const position = match.index || 0;
+      
+      if (rawPeriod) {
+        // Normalize period (handle A.M./P.M. format)
+        const period = rawPeriod.toUpperCase().replace(/\./g, '').replace(/M$/, 'M');
+        
+        expressions.push({
+          time: `${hours}:${minutes}`,
+          period,
+          confidence: 0.9,
+          explicit: true,
+          position,
+        });
+      } else {
+        expressions.push({
+          time: `${hours}:${minutes}`,
+          confidence: 0.8,
+          explicit: true,
+          position,
+        });
+      }
+    }
+
+    // 24-hour format (high confidence)
+    const time24Regex = /\b(\d{1,2}):(\d{2})\b/g;
+    while ((match = time24Regex.exec(text)) !== null) {
+      const hours = parseInt(match[1]);
+      const minutes = match[2];
+      const position = match.index || 0;
+      
+      if (hours >= 0 && hours <= 23) {
+        expressions.push({
+          time: `${hours}:${minutes}`,
+          confidence: 0.8,
+          explicit: true,
+          position,
+        });
+      }
+    }
+
+    // Word numbers with AM/PM (medium confidence)
+    const wordTimeRegex = /\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(AM|PM|A\.M\.|P\.M\.)\b/gi;
+    while ((match = wordTimeRegex.exec(text)) !== null) {
+      const wordNum = match[1].toLowerCase();
+      const rawPeriod = match[2];
+      const position = match.index || 0;
+      
+      if (this.wordToNumber[wordNum] && rawPeriod) {
+        const period = rawPeriod.toUpperCase().replace(/\./g, '').replace(/M$/, 'M');
+        
+        expressions.push({
+          time: `${this.wordToNumber[wordNum]}:00`,
+          period,
+          confidence: 0.7,
+          explicit: true,
+          position,
+        });
+      }
+    }
+
+    return expressions;
+  }
+
+  // Find time expressions in text (legacy method for backward compatibility)
   private static findTimeExpressions(text: string): Array<{ time: string; period?: string; confidence: number; explicit: boolean }> {
     const expressions: Array<{ time: string; period?: string; confidence: number; explicit: boolean }> = [];
 
