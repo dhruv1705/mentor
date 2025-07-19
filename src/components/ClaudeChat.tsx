@@ -355,8 +355,11 @@ const ClaudeChat = forwardRef<ClaudeChatHandle, ClaudeChatProps>((props, ref) =>
     try {
       const response = await claudeApi.sendMessage(messageToSend);
       
-      // Only clear input field AFTER successful send - keep speech text
+      // Clear both input field AND speech text after successful send
       setInputText('');
+      if (onClearText) {
+        onClearText();
+      }
       
       // Automatically transition to speaking state (Red → Green)
       setOrbState('speaking');
