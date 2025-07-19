@@ -12,9 +12,7 @@ interface ClaudeChatProps {
   onStartListening?: () => void;
   onStopListening?: () => void;
   onClearText?: () => void;
-  speechCompleted?: boolean;
   onSpeakingChange?: (isSpeaking: boolean) => void;
-  speechCountdown?: number;
 }
 
 interface ClaudeChatHandle {
@@ -38,9 +36,7 @@ const ClaudeChat = forwardRef<ClaudeChatHandle, ClaudeChatProps>((props, ref) =>
     onStartListening,
     onStopListening,
     onClearText,
-    speechCompleted,
-    onSpeakingChange,
-    speechCountdown = 0
+    onSpeakingChange
   } = props;
   const [inputText, setInputText] = useState(initialText);
   const [isLoading, setIsLoading] = useState(false);
@@ -48,60 +44,79 @@ const ClaudeChat = forwardRef<ClaudeChatHandle, ClaudeChatProps>((props, ref) =>
   const [error, setError] = useState<string | null>(null);
   const [ttsStatus, setTtsStatus] = useState<TTSStatus>(ttsService.getStatus());
   const [profileUpdateNotification, setProfileUpdateNotification] = useState<string | null>(null);
-  const [autoSendEnabled, setAutoSendEnabled] = useState(true);
-  const [autoSendCountdown, setAutoSendCountdown] = useState(0);
-  const [autoSendTimeoutId, setAutoSendTimeoutId] = useState<NodeJS.Timeout | null>(null);
+  // Auto-send functionality removed for simplicity
   const [currentTtsProvider, setCurrentTtsProvider] = useState<TTSProvider>('system');
   const [elevenLabsAvailable, setElevenLabsAvailable] = useState(false);
   const [orbState, setOrbState] = useState<'idle' | 'speaking' | 'listening'>('idle');
-  const [isFirstInteraction, setIsFirstInteraction] = useState(true);
 
   const { profile, schedule, updateProfileField, getProfileCompletion, refreshProfile, updateSchedule, updateScheduleField, refreshSchedule } = useAuth();
 
-  // Generate context-aware questions based on user profile and conversation history
-  const generateContextualQuestion = (): string => {
-    const completion = getProfileCompletion();
+  // Get current question number based on collected data
+  const getCurrentQuestionNumber = (): number => {
+    let questionNumber = 1;
     
-    // First time user welcome
-    if (completion.completionPercentage === 0) {
-      return "Welcome to mentor! Tell me about yourself to get started.";
+    // Check if profile question (1) is completed - any profile field means we can move to question 2
+    const hasValidGender = profile?.gender && 
+                          profile.gender !== 'not_specified' && 
+                          profile.gender !== 'Not specified' &&
+                          profile.gender !== 'Not provided' &&
+                          profile.gender !== 'not provided' &&
+                          profile.gender !== '';
+    const hasAnyProfileInfo = (profile?.name && profile.name !== 'Voice Assistant User') || 
+                              profile?.age || 
+                              hasValidGender || 
+                              (profile?.height && profile.height > 0);
+    
+    if (hasAnyProfileInfo) questionNumber = Math.max(questionNumber, 2);
+    
+    // Check sleep schedule question (2) - both sleep_time AND wake_time needed
+    const hasSleepSchedule = schedule?.weekday?.sleep_time && schedule?.weekday?.wake_time;
+    if (hasSleepSchedule) questionNumber = Math.max(questionNumber, 3);
+    
+    // Check meal schedule question (3) - all three meal times needed
+    const hasMealSchedule = schedule?.weekday?.breakfast_time && schedule?.weekday?.lunch_time && schedule?.weekday?.dinner_time;
+    if (hasMealSchedule) questionNumber = Math.max(questionNumber, 4);
+    
+    // Check target sleep schedule question (4) - both target sleep and wake times needed
+    const hasTargetSleepSchedule = schedule?.weekday?.target_sleep_time && schedule?.weekday?.target_wake_time;
+    if (hasTargetSleepSchedule) questionNumber = Math.max(questionNumber, 5);
+    
+    // Check target meal schedule question (5) - all three target meal times needed
+    const hasTargetMealSchedule = schedule?.weekday?.target_breakfast_time && schedule?.weekday?.target_lunch_time && schedule?.weekday?.target_dinner_time;
+    if (hasTargetMealSchedule) questionNumber = Math.max(questionNumber, 6);
+    
+    return questionNumber;
+  };
+
+  // Generate structured question based on current progress
+  const generateStructuredQuestion = (): string => {
+    const questionNumber = getCurrentQuestionNumber();
+    
+    if (questionNumber > 5) {
+      return "Thank you! Data collection complete.";
     }
     
-    // Profile completion questions
-    if (completion.missingFields.length > 0) {
-      const missingField = completion.missingFields[0];
-      switch (missingField) {
-        case 'name':
-          return "What's your name?";
-        case 'age':
-          return "How old are you?";
-        case 'occupation':
-          return "What do you do for work?";
-        case 'interests':
-          return "What are your main interests or hobbies?";
-        case 'goals':
-          return "What are your current goals or aspirations?";
-        case 'location':
-          return "Where are you located?";
-        case 'education':
-          return "What's your educational background?";
-        case 'experience':
-          return "Tell me about your professional experience.";
-        default:
-          return "Tell me more about yourself.";
-      }
+    return `Question ${questionNumber} of 5`;
+  };
+
+  // Get the appropriate question text based on current progress
+  const getQuestionText = (): string => {
+    const questionNumber = getCurrentQuestionNumber();
+    
+    switch (questionNumber) {
+      case 1:
+        return "Question 1 of 5: Welcome to Mentor app, To start off with, Please tell me your name, age, gender and height. You can answer whatever you are comfortable answering";
+      case 2:
+        return "Question 2 of 5: Tell me about your sleep schedule, What time do you go to bed and what time do you usually wake up?";
+      case 3:
+        return "Question 3 of 5: Now tell me about your meals, What time do you have breakfast lunch and dinner?";
+      case 4:
+        return "Question 4 of 5: Now that we know your current daily schedule, Let us understand your Targeted schedule. Why don't you tell me what time would you like to go to sleep and what time would you like to wake up?";
+      case 5:
+        return "Question 5 of 5: Now tell me what time you would like to have your breakfast lunch and dinner.";
+      default:
+        return "Thank you! Data collection complete.";
     }
-    
-    // General conversation starters when profile is complete
-    const conversationStarters = [
-      "How are you feeling today?",
-      "What's on your mind?",
-      "What would you like to talk about?",
-      "How can I help you today?",
-      "What's been happening in your life lately?",
-    ];
-    
-    return conversationStarters[Math.floor(Math.random() * conversationStarters.length)];
   };
 
   // Handle orb tap with simplified state transitions
@@ -147,14 +162,14 @@ const ClaudeChat = forwardRef<ClaudeChatHandle, ClaudeChatProps>((props, ref) =>
     try {
       let responseText: string;
       
-      if (isFirstInteraction) {
-        // Show welcome message on first interaction
-        responseText = "Welcome to Mentor app. I will try and understand what your current daily schedule is so we can improve it and make it better";
-        setIsFirstInteraction(false);
+      // Always use data-driven question determination
+      const currentQuestion = getCurrentQuestionNumber();
+      
+      if (currentQuestion > 5) {
+        responseText = "Thank you! Data collection complete.";
       } else {
-        // Generate contextual question for subsequent interactions
-        const question = generateContextualQuestion();
-        responseText = await claudeApi.sendMessage(question);
+        // Get the appropriate question based on current progress
+        responseText = getQuestionText();
       }
       
       // Start TTS
@@ -222,34 +237,17 @@ const ClaudeChat = forwardRef<ClaudeChatHandle, ClaudeChatProps>((props, ref) =>
     setInputText(initialText);
   }, [initialText]);
 
-  // Start auto-send timer when speech recognition completes
-  useEffect(() => {
-    if (speechCompleted && initialText.trim() && autoSendEnabled && !isLoading) {
-      startAutoSendTimer();
-    }
-  }, [speechCompleted, initialText]);
-
-  // Auto-send countdown timer
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (autoSendCountdown > 0) {
-      interval = setInterval(() => {
-        setAutoSendCountdown(prev => prev - 1);
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [autoSendCountdown]);
-
-  // Auto-send when countdown reaches 0
-  useEffect(() => {
-    if (autoSendCountdown === 0 && autoSendTimeoutId && inputText.trim()) {
-      sendMessage();
-    }
-  }, [autoSendCountdown]);
+  // Auto-send functionality removed - manual send only
 
   // Set up TTS status listener and load TTS info
   useEffect(() => {
     const handleTtsStatusChange = (status: TTSStatus) => {
+      console.log('🔊 TTS Status Change:', {
+        isPlaying: status.isPlaying,
+        currentText: status.currentText,
+        currentOrbState: orbState
+      });
+      
       setTtsStatus(status);
       // Update current sentence display
       setCurrentSentence(status.currentSentence);
@@ -257,15 +255,26 @@ const ClaudeChat = forwardRef<ClaudeChatHandle, ClaudeChatProps>((props, ref) =>
       // Update speaking state based on TTS status
       if (status.isPlaying && status.currentText !== null) {
         // TTS is playing - ensure orb state is speaking
+        console.log('🔊 TTS started - setting orb to speaking');
         setOrbState('speaking');
         if (onSpeakingChange) {
           onSpeakingChange(true);
         }
       } else if (!status.isPlaying && status.currentText === null && orbState === 'speaking') {
-        // TTS has completed naturally - stay in speaking state until user taps
+        // TTS has completed naturally - automatically transition to listening in auto-listen mode
+        console.log('🔊 TTS completed - transitioning to listening mode');
         if (onSpeakingChange) {
           onSpeakingChange(false);
         }
+        
+        // Auto-transition to listening after TTS completes
+        setTimeout(() => {
+          console.log('🔊 Auto-transitioning to listening state');
+          setOrbState('listening');
+          if (onStartListening) {
+            onStartListening();
+          }
+        }, 750); // Delay to ensure TTS audio has fully stopped
       }
     };
 
@@ -281,7 +290,7 @@ const ClaudeChat = forwardRef<ClaudeChatHandle, ClaudeChatProps>((props, ref) =>
     return () => {
       ttsService.removeStatusListener(handleTtsStatusChange);
     };
-  }, []);
+  }, [orbState, onStartListening, onSpeakingChange]);
 
   // Set up Claude API context with profile information
   useEffect(() => {
@@ -355,24 +364,19 @@ const ClaudeChat = forwardRef<ClaudeChatHandle, ClaudeChatProps>((props, ref) =>
     if (!inputText.trim() || isLoading) return;
 
     const messageToSend = inputText.trim();
-    setInputText('');
     setError(null);
     setIsLoading(true);
     
-    // Clear auto-send timer and countdown
-    if (autoSendTimeoutId) {
-      clearTimeout(autoSendTimeoutId);
-      setAutoSendTimeoutId(null);
-    }
-    setAutoSendCountdown(0);
-    
-    // Clear speech text in parent component to prevent accumulation
-    if (onClearText) {
-      onClearText();
-    }
+    // Auto-send functionality removed
 
     try {
       const response = await claudeApi.sendMessage(messageToSend);
+      
+      // Clear both input field AND speech text after successful send
+      setInputText('');
+      if (onClearText) {
+        onClearText();
+      }
       
       // Automatically transition to speaking state (Red → Green)
       setOrbState('speaking');
@@ -394,6 +398,7 @@ const ClaudeChat = forwardRef<ClaudeChatHandle, ClaudeChatProps>((props, ref) =>
     } catch (error) {
       setError('Failed to send message. Please try again.');
       console.error('Chat error:', error);
+      // Keep text on error - don't clear input or speech text
       // Fall back to idle state on error
       await handleErrorFallback();
     } finally {
@@ -463,20 +468,7 @@ const ClaudeChat = forwardRef<ClaudeChatHandle, ClaudeChatProps>((props, ref) =>
     );
   };
 
-  const startAutoSendTimer = () => {
-    // Clear any existing timer
-    if (autoSendTimeoutId) {
-      clearTimeout(autoSendTimeoutId);
-    }
-    
-    // Start 4-second countdown
-    setAutoSendCountdown(4);
-    const timeoutId = setTimeout(() => {
-      setAutoSendCountdown(0);
-    }, 4000);
-    
-    setAutoSendTimeoutId(timeoutId);
-  };
+  // startAutoSendTimer function removed
 
   const retryLastMessage = async () => {
     const lastMessage = claudeApi.getLastUserMessage();
@@ -533,6 +525,11 @@ const ClaudeChat = forwardRef<ClaudeChatHandle, ClaudeChatProps>((props, ref) =>
         </View>
       )}
 
+      {/* Progress Indicator */}
+      <View style={styles.progressContainer}>
+        <Text style={styles.progressText}>Question {getCurrentQuestionNumber()} of 5</Text>
+      </View>
+
       {/* Current Sentence Display */}
       <View style={styles.sentenceContainer}>
         {currentSentence && (
@@ -547,11 +544,7 @@ const ClaudeChat = forwardRef<ClaudeChatHandle, ClaudeChatProps>((props, ref) =>
       </View>
 
       <View style={styles.inputContainer}>
-        {isListening && speechCountdown && speechCountdown > 0 ? (
-          <View style={styles.countdownContainer}>
-            <Text style={styles.countdownText}>Auto-stop in {speechCountdown}s</Text>
-          </View>
-        ) : null}
+        {/* Countdown removed for simplicity */}
         <View style={styles.inputRow}>
           <TextInput
             style={[styles.textInput, isListening && styles.textInputRecording]}
@@ -773,15 +766,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: '#00ccff',
   },
-  countdownContainer: {
-    alignItems: 'center',
-    paddingBottom: 8,
-  },
-  countdownText: {
-    fontSize: 12,
-    color: '#FF9500',
-    fontWeight: 'bold',
-  },
+  // Countdown styles removed
   textInputRecording: {
     borderColor: '#FF9500',
     borderWidth: 2,
@@ -853,5 +838,15 @@ const styles = StyleSheet.create({
   ttsToggleDivider: {
     color: 'rgba(255, 255, 255, 0.4)',
     fontSize: 14,
+  },
+  progressContainer: {
+    alignItems: 'center',
+    paddingVertical: 8,
+    marginBottom: 10,
+  },
+  progressText: {
+    color: '#00ccff',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

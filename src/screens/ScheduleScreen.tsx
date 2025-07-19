@@ -24,12 +24,20 @@ export default function ScheduleScreen() {
 
         {/* Schedule Visualization */}
         <View style={styles.visualizationContainer}>
-          <ScheduleVisualization schedule={schedule.weekday} />
+          <ScheduleVisualization 
+            schedule={schedule.weekday} 
+            title="Current Daily Schedule"
+          />
+          <ScheduleVisualization 
+            schedule={schedule.weekday} 
+            showTarget={true}
+            title="Target Daily Schedule"
+          />
         </View>
 
         {/* Detailed Schedule View */}
         <View style={styles.detailedScheduleContainer}>
-          <Text style={styles.sectionTitle}>Weekday Schedule</Text>
+          <Text style={styles.sectionTitle}>Current Weekday Schedule</Text>
           <View style={styles.scheduleGrid}>
             <View style={styles.scheduleItem}>
               <Text style={styles.scheduleLabel}>🌅 Wake Up</Text>
@@ -54,9 +62,36 @@ export default function ScheduleScreen() {
           </View>
         </View>
 
-        {/* Weekend Schedule */}
+        {/* Target Schedule View */}
         <View style={styles.detailedScheduleContainer}>
-          <Text style={styles.sectionTitle}>Weekend Schedule</Text>
+          <Text style={styles.sectionTitle}>Target Weekday Schedule</Text>
+          <View style={styles.scheduleGrid}>
+            <View style={styles.scheduleItem}>
+              <Text style={styles.scheduleLabel}>🌅 Wake Up</Text>
+              <Text style={styles.scheduleTime}>{schedule.weekday?.target_wake_time || 'Not set'}</Text>
+            </View>
+            <View style={styles.scheduleItem}>
+              <Text style={styles.scheduleLabel}>🍳 Breakfast</Text>
+              <Text style={styles.scheduleTime}>{schedule.weekday?.target_breakfast_time || 'Not set'}</Text>
+            </View>
+            <View style={styles.scheduleItem}>
+              <Text style={styles.scheduleLabel}>🍽️ Lunch</Text>
+              <Text style={styles.scheduleTime}>{schedule.weekday?.target_lunch_time || 'Not set'}</Text>
+            </View>
+            <View style={styles.scheduleItem}>
+              <Text style={styles.scheduleLabel}>🍽️ Dinner</Text>
+              <Text style={styles.scheduleTime}>{schedule.weekday?.target_dinner_time || 'Not set'}</Text>
+            </View>
+            <View style={styles.scheduleItem}>
+              <Text style={styles.scheduleLabel}>😴 Sleep</Text>
+              <Text style={styles.scheduleTime}>{schedule.weekday?.target_sleep_time || 'Not set'}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Current Weekend Schedule */}
+        <View style={styles.detailedScheduleContainer}>
+          <Text style={styles.sectionTitle}>Current Weekend Schedule</Text>
           <View style={styles.scheduleGrid}>
             <View style={styles.scheduleItem}>
               <Text style={styles.scheduleLabel}>🌅 Wake Up</Text>
@@ -77,6 +112,33 @@ export default function ScheduleScreen() {
             <View style={styles.scheduleItem}>
               <Text style={styles.scheduleLabel}>😴 Sleep</Text>
               <Text style={styles.scheduleTime}>{schedule.weekend?.sleep_time || 'Not set'}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Target Weekend Schedule */}
+        <View style={styles.detailedScheduleContainer}>
+          <Text style={styles.sectionTitle}>Target Weekend Schedule</Text>
+          <View style={styles.scheduleGrid}>
+            <View style={styles.scheduleItem}>
+              <Text style={styles.scheduleLabel}>🌅 Wake Up</Text>
+              <Text style={styles.scheduleTime}>{schedule.weekend?.target_wake_time || 'Not set'}</Text>
+            </View>
+            <View style={styles.scheduleItem}>
+              <Text style={styles.scheduleLabel}>🍳 Breakfast</Text>
+              <Text style={styles.scheduleTime}>{schedule.weekend?.target_breakfast_time || 'Not set'}</Text>
+            </View>
+            <View style={styles.scheduleItem}>
+              <Text style={styles.scheduleLabel}>🍽️ Lunch</Text>
+              <Text style={styles.scheduleTime}>{schedule.weekend?.target_lunch_time || 'Not set'}</Text>
+            </View>
+            <View style={styles.scheduleItem}>
+              <Text style={styles.scheduleLabel}>🍽️ Dinner</Text>
+              <Text style={styles.scheduleTime}>{schedule.weekend?.target_dinner_time || 'Not set'}</Text>
+            </View>
+            <View style={styles.scheduleItem}>
+              <Text style={styles.scheduleLabel}>😴 Sleep</Text>
+              <Text style={styles.scheduleTime}>{schedule.weekend?.target_sleep_time || 'Not set'}</Text>
             </View>
           </View>
         </View>
