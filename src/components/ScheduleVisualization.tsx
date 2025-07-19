@@ -5,15 +5,25 @@ import { UserSchedule } from '../types/schedule';
 interface ScheduleVisualizationProps {
   schedule: UserSchedule | null;
   compact?: boolean;
+  showTarget?: boolean;
+  title?: string;
 }
 
 export const ScheduleVisualization: React.FC<ScheduleVisualizationProps> = ({ 
   schedule, 
-  compact = false 
+  compact = false,
+  showTarget = false,
+  title
 }) => {
   if (!schedule) return null;
 
-  const scheduleItems = [
+  const scheduleItems = showTarget ? [
+    { icon: '🌅', label: 'Wake', time: schedule.target_wake_time, type: 'target_wake' },
+    { icon: '🍳', label: 'Breakfast', time: schedule.target_breakfast_time, type: 'target_breakfast' },
+    { icon: '🍽️', label: 'Lunch', time: schedule.target_lunch_time, type: 'target_lunch' },
+    { icon: '🍽️', label: 'Dinner', time: schedule.target_dinner_time, type: 'target_dinner' },
+    { icon: '😴', label: 'Sleep', time: schedule.target_sleep_time, type: 'target_sleep' },
+  ] : [
     { icon: '🌅', label: 'Wake', time: schedule.wake_time, type: 'wake' },
     { icon: '🍳', label: 'Breakfast', time: schedule.breakfast_time, type: 'breakfast' },
     { icon: '🍽️', label: 'Lunch', time: schedule.lunch_time, type: 'lunch' },
@@ -42,7 +52,7 @@ export const ScheduleVisualization: React.FC<ScheduleVisualizationProps> = ({
     return (
       <View style={styles.compactContainer}>
         <View style={styles.compactHeader}>
-          <Text style={styles.compactTitle}>Daily Schedule</Text>
+          <Text style={styles.compactTitle}>{title || 'Daily Schedule'}</Text>
           <View style={styles.progressContainer}>
             <View style={styles.progressBar}>
               <View 
@@ -75,7 +85,7 @@ export const ScheduleVisualization: React.FC<ScheduleVisualizationProps> = ({
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Your Daily Schedule</Text>
+        <Text style={styles.title}>{title || 'Your Daily Schedule'}</Text>
         <View style={styles.progressContainer}>
           <View style={styles.progressBar}>
             <View 

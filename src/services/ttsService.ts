@@ -216,7 +216,7 @@ export class TTSService {
     }
 
     try {
-      const voiceId = this.settings.elevenLabsVoiceId || 'ynPDxnl9LkoyPcG6LoYS';
+      const voiceId = this.settings.elevenLabsVoiceId || '4YYIPFl9wE5c4L2eu2Gb'; // River - neutral voice
       
       
       const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
