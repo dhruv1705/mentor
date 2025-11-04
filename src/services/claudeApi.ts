@@ -48,162 +48,106 @@ export class ClaudeApiService {
     this.context = context;
   }
 
-  // Generate system prompt with user context
+  // Generate system prompt for structured data collection
   private generateSystemPrompt(): string {
-    let systemPrompt = `You are a personal schedule optimization mentor. Your role is to help users improve their daily routine by optimizing 5 key time points:
+    let systemPrompt = `You are a data collection assistant. Your role is to collect specific information from users through structured questions only.
 
-1. Wake up time
-2. Breakfast time
-3. Lunch time
-4. Dinner time
-5. Sleep time
+Your task is to ask questions in this exact order:
 
-Your personality is supportive, focused, and data-driven. You ask specific questions about timing, track consistency, and provide gentle optimization suggestions.
+PHASE 1 - Profile Information (1 question):
+1. Welcome to Mentor app, To start off with, Please tell me your name, age, gender and height. You can answer whatever you are comfortable answering.
+
+PHASE 2 - Current Schedule (2 questions):
+2. Tell me about your sleep schedule, What time do you go to bed and what time do you usually wake up?
+3. Now tell me about your meals, What time do you have breakfast lunch and dinner?
+
+PHASE 3 - Target Schedule (2 questions):
+4. Now that we know your current daily schedule, Let us understand your Targeted schedule. Why don't you tell me what time would you like to go to sleep and what time would you like to wake up?
+5. Now tell me what time you would like to have your breakfast lunch and dinner.
 
 IMPORTANT GUIDELINES:
-1. Focus conversations on schedule optimization and daily routine
-2. Ask specific questions about the 5 time points when appropriate
-3. Provide actionable timing recommendations based on user patterns
-4. Be encouraging about schedule improvements and consistency
-5. Keep responses focused on schedule optimization while being conversational`;
+1. Ask only ONE question at a time
+2. Wait for the user's answer before asking the next question
+3. Do NOT provide advice, suggestions, or optimization recommendations
+4. Do NOT engage in general conversation
+5. Simply acknowledge the answer and ask the next question
+6. Show progress: "Question X of 5"
+7. If an answer is unclear, ask for clarification on that same question
+8. When all 5 questions are completed, say "Thank you! Data collection complete."`;
 
-    // Add user context if available
-    if (this.context?.profile) {
+    // Add current progress context
+    if (this.context?.profile || this.context?.schedule) {
       const profile = this.context.profile;
-      const profileInfo: string[] = [];
-
-      if (profile.name) profileInfo.push(`their name is ${profile.name}`);
-      if (profile.age) profileInfo.push(`they are ${profile.age} years old`);
-      if (profile.gender) profileInfo.push(`they identify as ${profile.gender}`);
-      if (profile.height) profileInfo.push(`they are ${profile.height}cm tall`);
-
-      if (profileInfo.length > 0) {
-        systemPrompt += `\n\nUSER CONTEXT: You know that ${profileInfo.join(', ')}. Use this information naturally in conversation when relevant, but don't repeat information they've already told you.`;
+      const schedule = this.context.schedule?.weekday;
+      
+      const answeredQuestions: string[] = [];
+      
+      // Track profile questions answered
+      if (profile?.name && profile.name !== 'Voice Assistant User') answeredQuestions.push('name');
+      if (profile?.age) answeredQuestions.push('age');
+      if (profile?.gender) answeredQuestions.push('gender');
+      if (profile?.height && profile.height > 0) answeredQuestions.push('height');
+      
+      // Track current schedule questions answered
+      if (schedule?.wake_time) answeredQuestions.push('current_wake');
+      if (schedule?.breakfast_time) answeredQuestions.push('current_breakfast');
+      if (schedule?.lunch_time) answeredQuestions.push('current_lunch');
+      if (schedule?.dinner_time) answeredQuestions.push('current_dinner');
+      if (schedule?.sleep_time) answeredQuestions.push('current_sleep');
+      
+      // Track target schedule questions answered (we'll need to add these fields)
+      // TODO: Add target schedule tracking
+      
+      if (answeredQuestions.length > 0) {
+        systemPrompt += `\n\nPROGRESS: Already answered questions for: ${answeredQuestions.join(', ')}. Continue with the next unanswered question in sequence. Show "Question X of 5" where X is the next question number.`;
+      } else {
+        systemPrompt += `\n\nSTART: Begin with "Question 1 of 5: Welcome to Mentor app, To start off with, Please tell me your name, age, gender and height. You can answer whatever you are comfortable answering"`;
       }
     }
 
-    // Add schedule context if available
-    if (this.context?.schedule) {
-      const schedule = this.context.schedule.weekday;
-      if (schedule) {
-        const scheduleInfo: string[] = [];
-        
-        if (schedule.wake_time) scheduleInfo.push(`wake up at ${schedule.wake_time}`);
-        if (schedule.breakfast_time) scheduleInfo.push(`have breakfast at ${schedule.breakfast_time}`);
-        if (schedule.lunch_time) scheduleInfo.push(`have lunch at ${schedule.lunch_time}`);
-        if (schedule.dinner_time) scheduleInfo.push(`have dinner at ${schedule.dinner_time}`);
-        if (schedule.sleep_time) scheduleInfo.push(`go to sleep at ${schedule.sleep_time}`);
-
-        if (scheduleInfo.length > 0) {
-          systemPrompt += `\n\nSCHEDULE CONTEXT: You know that they ${scheduleInfo.join(', ')}. Use this schedule information to provide personalized timing advice and ask relevant follow-up questions about their routine.`;
-          
-          // Add optimization suggestions
-          const optimizations = this.generateScheduleOptimizations(schedule);
-          if (optimizations.length > 0) {
-            systemPrompt += `\n\nSCHEDULE OPTIMIZATION OPPORTUNITIES: ${optimizations.join('; ')}. Mention these improvements naturally when relevant to the conversation.`;
-          }
-        }
-      }
-    }
-
-
-    // Add profile completion guidance
-    if (this.context?.profileCompletion) {
-      const completion = this.context.profileCompletion;
-      if (completion.missingFields.length > 0 && completion.completionPercentage < 100) {
-        systemPrompt += `\n\nPROFILE COMPLETION: The user's profile is ${completion.completionPercentage}% complete. Missing: ${completion.missingFields.join(', ')}. You may naturally ask about this information when appropriate, but prioritize helping with their actual questions first.`;
-      }
-    }
 
 
     return systemPrompt;
   }
 
-  // Generate schedule optimization suggestions
-  private generateScheduleOptimizations(schedule: any): string[] {
-    const optimizations: string[] = [];
-
-    // Helper function to convert time to minutes
-    const timeToMinutes = (timeStr: string): number => {
-      const [hours, minutes] = timeStr.split(':').map(Number);
-      return hours * 60 + minutes;
-    };
-
-    // Helper function to format time for display
-    const formatTime = (minutes: number): string => {
-      const hours = Math.floor(minutes / 60);
-      const mins = minutes % 60;
-      const period = hours >= 12 ? 'PM' : 'AM';
-      const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
-      return `${displayHours}:${mins.toString().padStart(2, '0')} ${period}`;
-    };
-
-    // Check wake time optimization
-    if (schedule.wake_time) {
-      const wakeMinutes = timeToMinutes(schedule.wake_time);
-      if (wakeMinutes < 360) { // Before 6 AM
-        optimizations.push("Consider waking up slightly later (around 6:30 AM) for better sleep quality");
-      } else if (wakeMinutes > 540) { // After 9 AM
-        optimizations.push("Earlier wake time (around 7:00 AM) can improve productivity and energy");
-      }
-    }
-
-    // Check breakfast timing relative to wake time
-    if (schedule.wake_time && schedule.breakfast_time) {
-      const wakeMinutes = timeToMinutes(schedule.wake_time);
-      const breakfastMinutes = timeToMinutes(schedule.breakfast_time);
-      const timeDiff = breakfastMinutes - wakeMinutes;
-
-      if (timeDiff > 120) { // More than 2 hours
-        const suggestedTime = formatTime(wakeMinutes + 60);
-        optimizations.push(`Try having breakfast within 1-2 hours of waking (around ${suggestedTime}) to boost metabolism`);
-      } else if (timeDiff < 30) { // Less than 30 minutes
-        optimizations.push("Consider waiting 30-60 minutes after waking before eating to aid digestion");
-      }
-    }
-
-    // Check lunch timing
-    if (schedule.lunch_time) {
-      const lunchMinutes = timeToMinutes(schedule.lunch_time);
-      if (lunchMinutes < 660) { // Before 11 AM
-        optimizations.push("Lunch might be too early - consider eating around 12:00-1:00 PM");
-      } else if (lunchMinutes > 840) { // After 2 PM
-        optimizations.push("Late lunch can affect dinner timing - try eating around 12:00-1:00 PM");
-      }
-    }
-
-    // Check dinner and sleep timing
-    if (schedule.dinner_time && schedule.sleep_time) {
-      const dinnerMinutes = timeToMinutes(schedule.dinner_time);
-      const sleepMinutes = timeToMinutes(schedule.sleep_time);
-      let timeDiff = sleepMinutes - dinnerMinutes;
-      
-      // Handle next day sleep time
-      if (timeDiff < 0) {
-        timeDiff += 24 * 60;
-      }
-
-      if (timeDiff < 120) { // Less than 2 hours
-        const suggestedTime = formatTime(sleepMinutes - 180);
-        optimizations.push(`Try eating dinner 3 hours before sleep (around ${suggestedTime}) for better sleep quality`);
-      } else if (timeDiff > 360) { // More than 6 hours
-        optimizations.push("Large gap between dinner and sleep - consider a light snack before bed");
-      }
-    }
-
-    // Check overall sleep time
-    if (schedule.sleep_time) {
-      const sleepMinutes = timeToMinutes(schedule.sleep_time);
-      if (sleepMinutes < 1320 && sleepMinutes > 60) { // Between 1 AM and 10 PM (converted to next day)
-        if (sleepMinutes < 120) { // Before 2 AM
-          optimizations.push("Very late bedtime - consider going to sleep by 10:00-11:00 PM");
-        }
-      } else if (sleepMinutes > 1380) { // After 11 PM
-        optimizations.push("Good bedtime range - maintain consistency for best results");
-      }
-    }
-
-    return optimizations;
+  // Get the next question number based on completed data
+  private getNextQuestionNumber(): number {
+    const profile = this.context?.profile;
+    const schedule = this.context?.schedule?.weekday;
+    
+    let questionNumber = 1;
+    
+    // Check if profile question (1) is completed - any profile field means we can move to question 2
+    const hasValidGender = profile?.gender && 
+                          profile.gender !== 'not_specified' && 
+                          profile.gender !== 'Not specified' &&
+                          profile.gender !== 'Not provided' &&
+                          profile.gender !== 'not provided' &&
+                          profile.gender !== '';
+    const hasAnyProfileInfo = (profile?.name && profile.name !== 'Voice Assistant User') || 
+                              profile?.age || 
+                              hasValidGender || 
+                              (profile?.height && profile.height > 0);
+    
+    if (hasAnyProfileInfo) questionNumber = Math.max(questionNumber, 2);
+    
+    // Check sleep schedule question (2) - both sleep_time AND wake_time needed
+    const hasSleepSchedule = schedule?.sleep_time && schedule?.wake_time;
+    if (hasSleepSchedule) questionNumber = Math.max(questionNumber, 3);
+    
+    // Check meal schedule question (3) - all three meal times needed
+    const hasMealSchedule = schedule?.breakfast_time && schedule?.lunch_time && schedule?.dinner_time;
+    if (hasMealSchedule) questionNumber = Math.max(questionNumber, 4);
+    
+    // Check target sleep schedule question (4) - both target sleep and wake times needed
+    const hasTargetSleepSchedule = schedule?.target_sleep_time && schedule?.target_wake_time;
+    if (hasTargetSleepSchedule) questionNumber = Math.max(questionNumber, 5);
+    
+    // Check target meal schedule question (5) - all three target meal times needed
+    const hasTargetMealSchedule = schedule?.target_breakfast_time && schedule?.target_lunch_time && schedule?.target_dinner_time;
+    if (hasTargetMealSchedule) questionNumber = Math.max(questionNumber, 6);
+    
+    return questionNumber;
   }
 
   // Extract and save schedule information from user message
@@ -222,7 +166,12 @@ IMPORTANT GUIDELINES:
             breakfast: 'breakfast_time',
             lunch: 'lunch_time',
             dinner: 'dinner_time',
-            sleep: 'sleep_time'
+            sleep: 'sleep_time',
+            target_wake: 'target_wake_time',
+            target_breakfast: 'target_breakfast_time',
+            target_lunch: 'target_lunch_time',
+            target_dinner: 'target_dinner_time',
+            target_sleep: 'target_sleep_time'
           };
           
           const fieldName = fieldMap[scheduleInfo.type];
@@ -276,8 +225,14 @@ IMPORTANT GUIDELINES:
       
       // Process gender
       if (genderExtraction.value && genderExtraction.confidence > 0.5) {
-        const hasGender = this.context.profile?.gender;
-        console.log('🔍 Gender check - hasGender:', hasGender, 'current profile gender:', this.context.profile?.gender);
+        const currentGender = this.context.profile?.gender;
+        const hasGender = currentGender && 
+          currentGender !== 'not_specified' && 
+          currentGender !== 'Not specified' &&
+          currentGender !== 'Not provided' &&
+          currentGender !== 'not provided' &&
+          currentGender !== '';
+        console.log('🔍 Gender check - hasGender:', hasGender, 'current profile gender:', currentGender);
         
         if (!hasGender) {
           await this.context.onProfileUpdate('gender', genderExtraction.value);

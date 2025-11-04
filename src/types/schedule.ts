@@ -6,6 +6,11 @@ export interface UserSchedule {
   lunch_time: string | null;
   dinner_time: string | null;
   sleep_time: string | null;
+  target_wake_time: string | null;
+  target_breakfast_time: string | null;
+  target_lunch_time: string | null;
+  target_dinner_time: string | null;
+  target_sleep_time: string | null;
   schedule_type: 'weekday' | 'weekend';
   created_at?: string;
   updated_at?: string;
