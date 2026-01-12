@@ -34,6 +34,7 @@ export default function VoiceAssistantOrb({
   const isRecordingRef = useRef(isRecording);
   const isSpeakingRef = useRef(isSpeaking);
 
+
   const onContextCreate = async (gl: any) => {
     // Initialize Three.js renderer
     const renderer = new Renderer({ gl });
@@ -56,6 +57,8 @@ export default function VoiceAssistantOrb({
 
     // Create particle system for dots on sphere surface
     const particleCount = 500;
+    
+    // Create particle system for dots on sphere surface
     const positions = new Float32Array(particleCount * 3);
     
     // Generate points evenly distributed on sphere surface

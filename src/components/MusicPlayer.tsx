@@ -4,6 +4,7 @@ import { Feather } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import { MusicTrack, MusicPlayerState } from '../types/music';
 import { ttsService } from '../services/ttsService';
+import { AudioUtils } from '../utils/audioUtils';
 
 interface MusicPlayerProps {
   track: MusicTrack;
@@ -21,8 +22,8 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [playbackPosition, setPlaybackPosition] = useState(0);
   const [playbackDuration, setPlaybackDuration] = useState(0);
-  const [volume, setVolume] = useState(1.0);
-  const [isMuted, setIsMuted] = useState(false);
+  const [volume, setVolume] = useState(0.8);
+  const [originalVolume, setOriginalVolume] = useState(0.8);
 
   useEffect(() => {
     loadTrack();
@@ -34,6 +35,24 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
     };
   }, [track.id]);
 
+  // Listen for TTS status changes for volume ducking
+  useEffect(() => {
+    const handleTtsStatusChange = (status: any) => {
+      if (sound && isPlaying) {
+        if (status.isPlaying) {
+          // Duck volume when TTS starts
+          duckVolume();
+        } else {
+          // Restore volume when TTS stops
+          restoreVolume();
+        }
+      }
+    };
+
+    ttsService.addStatusListener(handleTtsStatusChange);
+    return () => ttsService.removeStatusListener(handleTtsStatusChange);
+  }, [sound, isPlaying]);
+
   useEffect(() => {
     // Notify parent component of state changes
     if (onPlayerStateChange) {
@@ -44,12 +63,12 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
         playbackPosition,
         playbackDuration,
         volume,
-        isMuted,
+        isMuted: volume === 0,
         repeatMode: 'none',
         shuffleMode: false,
       });
     }
-  }, [isPlaying, isLoading, playbackPosition, playbackDuration, volume, isMuted]);
+  }, [isPlaying, isLoading, playbackPosition, playbackDuration, volume]);
 
   const loadTrack = async () => {
     try {
@@ -60,11 +79,11 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
         await sound.unloadAsync();
       }
 
-      // Check if TTS is playing and stop it
-      const ttsStatus = ttsService.getStatus();
-      if (ttsStatus.isPlaying) {
-        await ttsService.stop();
-      }
+      // Don't stop TTS - let volume ducking handle it
+      // const ttsStatus = ttsService.getStatus();
+      // if (ttsStatus.isPlaying) {
+      //   await ttsService.stop();
+      // }
 
       // Configure audio session for music playback
       await Audio.setAudioModeAsync({
@@ -81,12 +100,18 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
         { 
           shouldPlay: false,
           volume: volume,
-          isMuted: isMuted,
+          isMuted: volume === 0,
         },
         onPlaybackStatusUpdate
       );
 
       setSound(newSound);
+      
+      // Check if TTS is currently playing and duck volume immediately
+      const ttsStatus = ttsService.getStatus();
+      if (ttsStatus.isPlaying && isPlaying) {
+        await newSound.setVolumeAsync(volume * 0.25);
+      }
     } catch (error) {
       console.error('Error loading track:', error);
       Alert.alert('Error', 'Failed to load music track');
@@ -118,14 +143,20 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
         await sound.pauseAsync();
         setIsPlaying(false);
       } else {
-        // Stop TTS if it's playing
-        const ttsStatus = ttsService.getStatus();
-        if (ttsStatus.isPlaying) {
-          await ttsService.stop();
-        }
+        // Don't stop TTS - let volume ducking handle it
+        // const ttsStatus = ttsService.getStatus();
+        // if (ttsStatus.isPlaying) {
+        //   await ttsService.stop();
+        // }
         
         await sound.playAsync();
         setIsPlaying(true);
+        
+        // Check if TTS is currently playing and duck volume immediately
+        const ttsStatus = ttsService.getStatus();
+        if (ttsStatus.isPlaying) {
+          await sound.setVolumeAsync(originalVolume * 0.25);
+        }
       }
     } catch (error) {
       console.error('Error playing/pausing track:', error);
@@ -157,16 +188,10 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
     }
   };
 
-  const toggleMute = async () => {
-    if (!sound) return;
-
-    try {
-      const newMutedState = !isMuted;
-      await sound.setIsMutedAsync(newMutedState);
-      setIsMuted(newMutedState);
-    } catch (error) {
-      console.error('Error toggling mute:', error);
-    }
+  const handleVolumeSliderPress = (position: number) => {
+    // Calculate volume based on tap position (0-1)
+    const newVolume = Math.max(0, Math.min(1, position));
+    changeVolume(newVolume);
   };
 
   const changeVolume = async (newVolume: number) => {
@@ -176,8 +201,31 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
       const clampedVolume = Math.max(0, Math.min(1, newVolume));
       await sound.setVolumeAsync(clampedVolume);
       setVolume(clampedVolume);
+      setOriginalVolume(clampedVolume); // Update original volume when user changes it
     } catch (error) {
       console.error('Error changing volume:', error);
+    }
+  };
+
+  const duckVolume = async () => {
+    if (!sound) return;
+    
+    try {
+      // Duck volume to 25% of original with smooth transition
+      await AudioUtils.duckVolume(sound, originalVolume, { duration: 200 });
+    } catch (error) {
+      console.error('Error ducking volume:', error);
+    }
+  };
+
+  const restoreVolume = async () => {
+    if (!sound) return;
+    
+    try {
+      // Restore to original volume with smooth transition
+      await AudioUtils.restoreVolume(sound, originalVolume, { duration: 200 });
+    } catch (error) {
+      console.error('Error restoring volume:', error);
     }
   };
 
@@ -223,17 +271,33 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
 
       {/* Controls */}
       <View style={styles.controlsContainer}>
-        <TouchableOpacity
-          style={styles.controlButton}
-          onPress={toggleMute}
-          disabled={isLoading}
-        >
-          <Feather
-            name={isMuted ? 'volume-x' : 'volume-2'}
-            size={20}
-            color={isMuted ? '#ff4757' : '#00ccff'}
+        <View style={styles.volumeSliderContainer}>
+          <Feather 
+            name={volume === 0 ? 'volume-x' : volume < 0.5 ? 'volume-1' : 'volume-2'} 
+            size={16} 
+            color="#00ccff" 
           />
-        </TouchableOpacity>
+          <View style={styles.volumeSlider}>
+            <TouchableOpacity
+              style={styles.volumeSliderTrack}
+              onPress={(event) => {
+                const { locationX } = event.nativeEvent;
+                const sliderWidth = 80; // Approximate slider width
+                const position = locationX / sliderWidth;
+                handleVolumeSliderPress(position);
+              }}
+              activeOpacity={1}
+            >
+              <View 
+                style={[
+                  styles.volumeSliderFill,
+                  { width: `${volume * 100}%` }
+                ]}
+              />
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.volumeText}>{Math.round(volume * 100)}%</Text>
+        </View>
 
         <TouchableOpacity
           style={[styles.controlButton, styles.playButton]}
@@ -383,6 +447,36 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: '#00ccff',
     borderRadius: 2,
+  },
+  volumeSliderContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginHorizontal: 8,
+  },
+  volumeSlider: {
+    marginHorizontal: 8,
+  },
+  volumeSliderTrack: {
+    width: 80,
+    height: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  volumeSliderFill: {
+    height: '100%',
+    backgroundColor: '#00ccff',
+    borderRadius: 2,
+  },
+  volumeText: {
+    fontSize: 10,
+    color: '#00ccff',
+    minWidth: 28,
+    textAlign: 'center',
   },
 });
 

@@ -44,6 +44,10 @@ export const ProfileCompletion: React.FC<ProfileCompletionProps> = ({
         const age = typeof profile.age === 'string' ? parseInt(profile.age) : profile.age;
         return age && age > 0 ? `${age} years old` : '';
       case 'gender':
+        // Handle legacy "Not_Specified" values
+        if (profile.gender === 'Not_Specified' || profile.gender === 'not_specified') {
+          return '';
+        }
         return profile.gender ? profile.gender.replace('_', ' ') : '';
       case 'height':
         const height = typeof profile.height === 'string' ? parseInt(profile.height) : profile.height;

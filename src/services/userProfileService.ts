@@ -217,7 +217,7 @@ export class UserProfileService {
     // Handle both number and string types from database
     const hasAge = (typeof profile.age === 'number' && profile.age > 0) || 
                    (typeof profile.age === 'string' && parseInt(profile.age) > 0);
-    const hasGender = Boolean(profile.gender);
+    const hasGender = Boolean(profile.gender && profile.gender !== 'Not_Specified' && profile.gender !== 'not_specified');
     const hasHeight = (typeof profile.height === 'number' && profile.height > 0) || 
                       (typeof profile.height === 'string' && parseInt(profile.height) > 0);
     const hasName = Boolean(profile.name?.trim() && profile.name.trim() !== 'Voice Assistant User');
